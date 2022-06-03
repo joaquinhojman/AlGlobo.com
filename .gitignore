@@ -1,0 +1,11 @@
+/target/
+/alglobo/target/
+/banco/target/
+/aerolinea/target/
+/hotel/target/
+
+Cargo.lock
+/alglobo/Cargo.lock
+/banco/Cargo.lock
+/aerolinea/Cargo.lock
+/hotel/Cargo.lock
