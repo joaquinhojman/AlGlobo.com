@@ -9,3 +9,5 @@ Cargo.lock
 /banco/Cargo.lock
 /aerolinea/Cargo.lock
 /hotel/Cargo.lock
+
+/alglobo/logf.log
