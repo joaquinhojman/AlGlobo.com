@@ -1,15 +1,22 @@
+use crate::entity_data::Entity;
 use crate::entity_messenger::{EntityMessenger, ReceiveEntityTransaction};
+use crate::transaction::Transaction;
 use actix::{Actor, Addr, Context, Handler, Message};
-use std::process::exit;
-use tracing::info;
+use csv::StringRecord;
+use std::collections::HashMap;
+
+const HEADER_ID: &str = "id";
+const HEADER_HOTEL: &str = "hotel_cost";
+const HEADER_BANK: &str = "bank_cost";
+const HEADER_AIRLINE: &str = "airline_cost";
 
 pub struct TransactionDispatcher {
-    entities_mailboxes: Vec<Addr<EntityMessenger>>,
+    entity_mapping: HashMap<Entity, Addr<EntityMessenger>>,
 }
 
 impl TransactionDispatcher {
-    pub fn new(entities_mailboxes: Vec<Addr<EntityMessenger>>) -> Self {
-        TransactionDispatcher { entities_mailboxes }
+    pub fn new(entity_mapping: HashMap<Entity, Addr<EntityMessenger>>) -> Self {
+        TransactionDispatcher { entity_mapping }
     }
 }
 
@@ -20,44 +27,49 @@ impl Actor for TransactionDispatcher {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct ReceiveTransaction {
-    transaction: String,
+    transaction: StringRecord,
 }
 
 impl ReceiveTransaction {
-    pub fn new(transaction: String) -> Self {
+    pub fn new(transaction: StringRecord) -> Self {
         ReceiveTransaction { transaction }
     }
 
-    pub fn transform(&self) -> Vec<i64> {
-        let mut raw_transaction = self.transaction.clone();
-        let _ = raw_transaction.pop();
-        let _ = raw_transaction.pop();
-        raw_transaction
-            .split(';')
-            .map(|x| match x.parse::<i64>() {
-                Ok(x) => x,
-                Err(e) => {
-                    info!(
-                        event = "Error parsing f64",
-                        value = x,
-                        error = &format!("{:?}", e)[..]
-                    );
-                    exit(1);
-                }
-            })
-            .collect::<Vec<i64>>()
+    pub fn deserialize(&self) -> Transaction {
+        let header = StringRecord::from(vec![HEADER_ID, HEADER_HOTEL, HEADER_BANK, HEADER_AIRLINE]);
+        let raw_transaction = self.transaction.clone();
+        match raw_transaction.deserialize(Some(&header)) {
+            Ok(transaction) => transaction,
+            Err(e) => {
+                eprintln!("{}", e);
+                panic!()
+            }
+        }
     }
 }
 
 impl Handler<ReceiveTransaction> for TransactionDispatcher {
     type Result = ();
-
-    fn handle(&mut self, msg: ReceiveTransaction, _ctx: &mut Self::Context) -> Self::Result {
-        let msgs = msg.transform();
-        for i in 1..4 {
-            let mensajito = msgs[i];
-            let mensajote = ReceiveEntityTransaction::new(msgs[0], mensajito);
-            self.entities_mailboxes[i - 1].do_send(mensajote);
-        }
+    fn handle(
+        &mut self,
+        raw_transaction: ReceiveTransaction,
+        _ctx: &mut Self::Context,
+    ) -> Self::Result {
+        let transaction = raw_transaction.deserialize();
+        let entities_data = transaction.get_entities_data();
+        let _ = entities_data
+            .into_iter()
+            .map(|data| {
+                match self.entity_mapping.get(&data.entity_type) {
+                    Some(addr) => {
+                        let msg = ReceiveEntityTransaction::new(data);
+                        addr.do_send(msg);
+                    }
+                    None => {
+                        eprintln!("Invalid transaction arrived");
+                    }
+                };
+            })
+            .collect::<Vec<()>>();
     }
 }

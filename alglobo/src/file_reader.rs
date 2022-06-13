@@ -1,22 +1,24 @@
 use crate::transaction_dispatcher::{ReceiveTransaction, TransactionDispatcher};
 use actix::{Actor, Addr, Context, Handler, Message};
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+
+use actix::dev::MessageResponse;
+use csv::{Reader, StringRecord};
 
 pub struct FileReader {
-    transaction_file: BufReader<File>,
+    transaction_file_handle: Reader<File>,
     transaction_dispatcher: Addr<TransactionDispatcher>,
 }
 
 impl FileReader {
     pub fn new(
-        transaction_file: File,
+        transaction_file_path: String,
         transaction_dispatcher: Addr<TransactionDispatcher>,
-    ) -> Self {
-        FileReader {
-            transaction_file: BufReader::new(transaction_file),
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(FileReader {
+            transaction_file_handle: Reader::from_path(transaction_file_path)?,
             transaction_dispatcher,
-        }
+        })
     }
 }
 
@@ -24,30 +26,32 @@ impl Actor for FileReader {
     type Context = Context<Self>;
 }
 
+#[derive(MessageResponse)]
+pub enum ReadStatus {
+    KeepReading,
+    Eof,
+    ParseError(csv::Error),
+}
+
 #[derive(Message, Clone, Copy)]
-#[rtype(result = "bool")]
+#[rtype(result = "ReadStatus")]
 pub struct ServeNextTransaction {}
 
 impl Handler<ServeNextTransaction> for FileReader {
-    type Result = bool;
+    type Result = ReadStatus;
 
     fn handle(&mut self, _msg: ServeNextTransaction, _ctx: &mut Self::Context) -> Self::Result {
-        let mut line = String::new();
-        match self.transaction_file.read_line(&mut line) {
-            Ok(n) => {
-                if n > 0 {
-                    let response = ReceiveTransaction::new(line);
+        let mut record = StringRecord::new();
+        match self.transaction_file_handle.read_record(&mut record) {
+            Ok(any_left) => {
+                if any_left {
+                    let response = ReceiveTransaction::new(record);
                     self.transaction_dispatcher.do_send(response);
-                    true
-                } else {
-                    false
+                    return ReadStatus::KeepReading;
                 }
+                ReadStatus::Eof
             }
-            Err(e) => {
-                let response = ReceiveTransaction::new("".to_string());
-                self.transaction_dispatcher.do_send(response);
-                false
-            }
+            Err(e) => ReadStatus::ParseError(e),
         }
     }
 }
