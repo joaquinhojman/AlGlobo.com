@@ -3,7 +3,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::SystemTime;
-use tracing_subscriber::Layer;
+use std::sync::{mpsc, Arc, Mutex};
 
 #[derive(Clone, Debug)]
 pub struct DateTime {
@@ -98,91 +98,37 @@ fn seconds_to_datetime(ts: i64, tm: &mut DateTime) {
 }
 
 pub struct Logger {
-    file: String,
+    mutex: Arc<Mutex<File>>
 }
 
 impl Logger {
-    pub fn new(file: String) -> Self {
-        Logger { file }
-    }
-}
-
-impl<S> Layer<S> for Logger
-where
-    S: tracing::Subscriber,
-{
-    fn on_event(
-        &self,
-        event: &tracing::Event<'_>,
-        _ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
+    pub fn new(file: &str) -> Self {
         let mut output: File;
-        match OpenOptions::new().append(true).open(self.file.clone()) {
+        match OpenOptions::new().append(true).open(file.clone()) {
             Ok(file) => {
                 output = file;
             }
-            Err(_) => match File::create(self.file.clone()) {
+            Err(_) => match File::create(file.clone()) {
                 Ok(file) => {
                     output = file;
                 }
                 Err(_) => {
-                    return;
+                    panic!();
                 }
             },
         }
-
+        Logger { mutex: Arc::new(Mutex::new(output)) }
+    }
+    
+    pub fn log(&mut self, msg: String) {
+        let mut output = self.mutex.lock().unwrap();
         let mut tm = DateTime::new();
         if let Ok(n) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
             let n_secs = n.as_secs() as i64;
             seconds_to_datetime(n_secs, &mut tm);
         }
-
-        let _r = writeln!(output, "{} LOG: {:?}", tm, event.metadata().name());
-        let mut visitor = PrintlnVisitor::new(output);
-        event.record(&mut visitor);
+        let _r = writeln!(output, "{} LOG: {:?}", tm, msg);
     }
 }
 
-struct PrintlnVisitor {
-    file: File,
-}
 
-impl PrintlnVisitor {
-    pub fn new(file: File) -> Self {
-        PrintlnVisitor { file }
-    }
-}
-
-impl tracing::field::Visit for PrintlnVisitor {
-    fn record_f64(&mut self, field: &tracing::field::Field, value: f64) {
-        let _r = writeln!(self.file, "  {}={}", field.name(), value);
-    }
-
-    fn record_i64(&mut self, field: &tracing::field::Field, value: i64) {
-        let _r = writeln!(self.file, "  {}={}", field.name(), value);
-    }
-
-    fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
-        let _r = writeln!(self.file, "  {}={}", field.name(), value);
-    }
-
-    fn record_bool(&mut self, field: &tracing::field::Field, value: bool) {
-        let _r = writeln!(self.file, "  {}={}", field.name(), value);
-    }
-
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        let _r = writeln!(self.file, "  {}={}", field.name(), value);
-    }
-
-    fn record_error(
-        &mut self,
-        field: &tracing::field::Field,
-        value: &(dyn std::error::Error + 'static),
-    ) {
-        let _r = writeln!(self.file, "  {}={}", field.name(), value);
-    }
-
-    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        println!("  field={} value={:?}", field.name(), value)
-    }
-}

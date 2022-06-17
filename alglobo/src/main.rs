@@ -20,23 +20,19 @@ use actix_rt::{Arbiter, System};
 use std::env::args;
 use std::process::exit;
 use std::sync::{mpsc, Arc, Mutex};
-use tracing::info;
-use tracing_subscriber::prelude::*;
 
-const LOG_PATH: &str = "logf.log";
 const EINVAL_ARGS: &str = "Invalid arguments";
 
+
 fn main() -> Result<(), ()> {
-    tracing_subscriber::registry()
-        .with(Logger::new(LOG_PATH.to_string()))
-        .init();
-    info!(event = "Server up");
-
+    
     let actor_system = System::new();
+    
+    let mut logger = Logger::new("logf.log");
 
+    logger.log("funciona".to_string());
     let argv = args().collect::<Vec<String>>();
     if argv.len() != 2 {
-        info!(event = EINVAL_ARGS);
         exit(1);
     }
 
