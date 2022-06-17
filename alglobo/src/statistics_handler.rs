@@ -98,6 +98,9 @@ impl Handler<GetMeanDuration> for StatisticsHandler {
     type Result = f64;
 
     fn handle(&mut self, _msg: GetMeanDuration, _ctx: &mut Self::Context) -> Self::Result {
+        if self.current_handled_transactions == 0 {
+            return 0.0;
+        }
         self.elapsed_time.as_secs() as f64 / self.current_handled_transactions as f64
     }
 }
@@ -110,6 +113,18 @@ mod tests {
     use actix::Actor;
     use float_cmp::approx_eq;
     use std::time::Duration;
+
+    #[actix_rt::test]
+    async fn test_no_transactions_shields_0_seconds() {
+        let addr = StatisticsHandler::_new().start();
+
+        let secs = addr
+            .send(GetMeanDuration {})
+            .await
+            .expect("fallo envio de mensaje de log");
+
+        assert!(approx_eq!(f64, secs, 0.0, epsilon = 1e-9));
+    }
 
     #[actix_rt::test]
     async fn test_one_transaction_takes_3_seconds_and_mean_time_is_3_seconds() {
