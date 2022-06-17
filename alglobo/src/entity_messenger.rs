@@ -1,18 +1,19 @@
-use crate::entity_data::EntityData;
+use std::collections::HashMap;
 use crate::Entity;
 use actix::{Actor, Context, Handler, Message};
-use std::io::Write;
-use std::net::TcpStream;
+use std::net::UdpSocket;
+use crate::transaction::{Transaction, TransactionState};
 
 pub struct EntityMessenger {
-    _entity: Entity,
-    stream: TcpStream,
+    stream: UdpSocket,
+    address_map: HashMap<Entity, String>,
+    transaction_log: HashMap<u64, TransactionState>
 }
 
 impl EntityMessenger {
-    pub fn new(_entity: Entity, addr: String) -> Self {
-        let stream = TcpStream::connect(addr).unwrap();
-        EntityMessenger { _entity, stream }
+    pub fn new(local_addr: String, address_map: HashMap<Entity, String>) -> Self {
+        let stream = UdpSocket::bind(local_addr).expect("Could not bind on that address");
+        EntityMessenger { stream, address_map, transaction_log: HashMap::new() }
     }
 }
 
@@ -22,28 +23,26 @@ impl Actor for EntityMessenger {
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct ReceiveEntityTransaction {
-    entity_data: EntityData,
+pub struct ServeTransaction {
+    transaction: Transaction,
 }
 
-impl ReceiveEntityTransaction {
-    pub fn new(entity_data: EntityData) -> Self {
-        ReceiveEntityTransaction { entity_data }
+impl ServeTransaction {
+    pub fn new(transaction: Transaction) -> Self {
+        ServeTransaction { transaction }
     }
 }
 
-impl Handler<ReceiveEntityTransaction> for EntityMessenger {
+impl Handler<ServeTransaction> for EntityMessenger {
     type Result = ();
 
-    fn handle(&mut self, msg: ReceiveEntityTransaction, _ctx: &mut Self::Context) -> Self::Result {
-        println!(
-            "{}, {}",
-            msg.entity_data.transaction_id, msg.entity_data.cost
-        );
-        let to_send: Vec<u8> = msg.entity_data.into();
-        match self.stream.write_all(to_send.as_slice()) {
-            Ok(()) => println!("written"),
-            Err(e) => println!("{}", e),
+    fn handle(&mut self, msg: ServeTransaction, _ctx: &mut Self::Context) -> Self::Result {
+        let v = msg.transaction.get_entities_data();
+        for (entity, data) in v {
+            let addr = &self.address_map[&entity];
+            let data_buffer: Vec<u8> = data.into();
+            println!("[MESSENGER] sending data");
+            self.stream.send_to(data_buffer.as_slice(), addr).expect("falle XD");
         }
     }
 }

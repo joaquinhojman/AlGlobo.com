@@ -42,25 +42,31 @@ fn main() -> Result<(), ()> {
 
     let file_path = argv[1].clone();
 
-    let mut entity_map = HashMap::new();
     let (sx, tx) = mpsc::channel();
+
+    let addr = "localhost:8888".to_string();
+
+    let mut entity_addresses = HashMap::new();
+
+    entity_addresses.insert(Entity::Hotel, "localhost:1234".to_string());
+    entity_addresses.insert(Entity::Bank, "localhost:1235".to_string());
+    entity_addresses.insert(Entity::Airline, "localhost:1236".to_string());
+
     let sender = Arc::new(Mutex::new(sx));
-    for entity_handler in &[Entity::Hotel, Entity::Bank, Entity::Airline] {
-        let entity_arbiter = Arbiter::new();
-        let addr = "localhost:8888".to_string();
-        let local_sender = sender.clone();
-        let execution = async move {
-            let entity_addr = EntityMessenger::new(*entity_handler, addr).start();
-            local_sender.lock().unwrap().send(entity_addr).unwrap();
-            println!("hello from {:?}", entity_handler);
-        };
-        entity_arbiter.spawn(execution);
-        let entity_addr = tx.recv().unwrap();
-        entity_map.insert(*entity_handler, entity_addr);
-    }
+
+    let entity_arbiter = Arbiter::new();
+    let local_sender = sender.clone();
+
+    let execution = async move {
+        let entity_addr = EntityMessenger::new(addr, entity_addresses).start();
+        local_sender.lock().unwrap().send(entity_addr).unwrap();
+    };
+
+    entity_arbiter.spawn(execution);
+    let entity_addr = tx.recv().unwrap();
 
     actor_system.block_on(async {
-        let transaction_dispatcher = TransactionDispatcher::new(entity_map).start();
+        let transaction_dispatcher = TransactionDispatcher::new(entity_addr).start();
         let file_reader = match FileReader::new(file_path, transaction_dispatcher) {
             Ok(file_reader) => file_reader,
             Err(e) => {

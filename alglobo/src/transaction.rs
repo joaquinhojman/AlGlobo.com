@@ -1,6 +1,13 @@
 use crate::entity_data::{Entity, EntityData};
 use serde::Deserialize;
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub enum TransactionState {
+    Wait,
+    Commit,
+    Abort,
+}
+
 #[derive(Deserialize)]
 pub struct Transaction {
     id: u64,

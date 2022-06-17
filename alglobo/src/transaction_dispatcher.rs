@@ -1,5 +1,5 @@
 use crate::entity_data::Entity;
-use crate::entity_messenger::{EntityMessenger, ReceiveEntityTransaction};
+use crate::entity_messenger::{EntityMessenger, ServeTransaction};
 use crate::transaction::Transaction;
 use actix::{Actor, Addr, Context, Handler, Message};
 use csv::StringRecord;
@@ -11,12 +11,12 @@ const HEADER_BANK: &str = "bank_cost";
 const HEADER_AIRLINE: &str = "airline_cost";
 
 pub struct TransactionDispatcher {
-    entity_mapping: HashMap<Entity, Addr<EntityMessenger>>,
+    messenger: Addr<EntityMessenger>,
 }
 
 impl TransactionDispatcher {
-    pub fn new(entity_mapping: HashMap<Entity, Addr<EntityMessenger>>) -> Self {
-        TransactionDispatcher { entity_mapping }
+    pub fn new(messenger: Addr<EntityMessenger>) -> Self {
+        TransactionDispatcher { messenger }
     }
 }
 
@@ -56,21 +56,8 @@ impl Handler<ReceiveTransaction> for TransactionDispatcher {
         _ctx: &mut Self::Context,
     ) -> Self::Result {
         let transaction = raw_transaction.deserialize();
-        let entities_data = transaction.get_entities_data();
-        let _ = entities_data
-            .into_iter()
-            .map(|t| {
-                let (entity_type, entity_data) = t;
-                match self.entity_mapping.get(&entity_type) {
-                    Some(addr) => {
-                        let msg = ReceiveEntityTransaction::new(entity_data);
-                        addr.do_send(msg);
-                    }
-                    None => {
-                        eprintln!("Invalid transaction arrived");
-                    }
-                };
-            })
-            .collect::<Vec<()>>();
+        let msg = ServeTransaction::new(transaction);
+        println!("[DISPATCHER] sending to messenger");
+        let _ = self.messenger.send(msg);
     }
 }
