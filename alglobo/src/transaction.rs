@@ -11,16 +11,16 @@ pub struct Transaction {
 
 // TODO: refactor
 impl Transaction {
-    pub(crate) fn get_entities_data(&self) -> Vec<EntityData> {
+    pub(crate) fn get_entities_data(&self) -> Vec<(Entity, EntityData)> {
         let mut data = vec![];
         if self.hotel_cost > 0 {
-            data.push(EntityData::new(self.id, Entity::Hotel, self.hotel_cost));
+            data.push((Entity::Hotel, EntityData::new(self.id, self.hotel_cost)));
         }
         if self.bank_cost > 0 {
-            data.push(EntityData::new(self.id, Entity::Bank, self.bank_cost));
+            data.push((Entity::Bank, EntityData::new(self.id, self.bank_cost)));
         }
         if self.airline_cost > 0 {
-            data.push(EntityData::new(self.id, Entity::Airline, self.airline_cost));
+            data.push((Entity::Airline, EntityData::new(self.id, self.airline_cost)));
         }
         data
     }

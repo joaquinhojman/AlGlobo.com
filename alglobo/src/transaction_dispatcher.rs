@@ -59,10 +59,11 @@ impl Handler<ReceiveTransaction> for TransactionDispatcher {
         let entities_data = transaction.get_entities_data();
         let _ = entities_data
             .into_iter()
-            .map(|data| {
-                match self.entity_mapping.get(&data.entity_type) {
+            .map(|t| {
+                let (entity_type, entity_data) = t;
+                match self.entity_mapping.get(&entity_type) {
                     Some(addr) => {
-                        let msg = ReceiveEntityTransaction::new(data);
+                        let msg = ReceiveEntityTransaction::new(entity_data);
                         addr.do_send(msg);
                     }
                     None => {

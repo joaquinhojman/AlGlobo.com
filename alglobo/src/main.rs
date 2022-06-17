@@ -1,9 +1,9 @@
 extern crate core;
-
 mod entity_data;
 mod entity_messenger;
 mod file_reader;
 mod logger;
+mod statistics_handler;
 mod transaction;
 mod transaction_dispatcher;
 
@@ -16,9 +16,10 @@ use crate::entity_data::Entity;
 use crate::entity_messenger::EntityMessenger;
 use crate::file_reader::{ReadStatus, ServeNextTransaction};
 use actix::Actor;
-use actix_rt::System;
+use actix_rt::{Arbiter, System};
 use std::env::args;
 use std::process::exit;
+use std::sync::{mpsc, Arc, Mutex};
 use tracing::info;
 use tracing_subscriber::prelude::*;
 
@@ -41,15 +42,24 @@ fn main() -> Result<(), ()> {
 
     let file_path = argv[1].clone();
 
-    actor_system.block_on(async {
-        let entity_map = vec![Entity::Hotel, Entity::Bank, Entity::Airline]
-            .into_iter()
-            .fold(HashMap::new(), |mut acc, entity| {
-                let entity_addr = EntityMessenger::new(entity).start();
-                acc.insert(entity, entity_addr);
-                acc
-            });
+    let mut entity_map = HashMap::new();
+    let (sx, tx) = mpsc::channel();
+    let sender = Arc::new(Mutex::new(sx));
+    for entity_handler in &[Entity::Hotel, Entity::Bank, Entity::Airline] {
+        let entity_arbiter = Arbiter::new();
+        let addr = "localhost:8888".to_string();
+        let local_sender = sender.clone();
+        let execution = async move {
+            let entity_addr = EntityMessenger::new(*entity_handler, addr).start();
+            local_sender.lock().unwrap().send(entity_addr).unwrap();
+            println!("hello from {:?}", entity_handler);
+        };
+        entity_arbiter.spawn(execution);
+        let entity_addr = tx.recv().unwrap();
+        entity_map.insert(*entity_handler, entity_addr);
+    }
 
+    actor_system.block_on(async {
         let transaction_dispatcher = TransactionDispatcher::new(entity_map).start();
         let file_reader = match FileReader::new(file_path, transaction_dispatcher) {
             Ok(file_reader) => file_reader,
@@ -60,6 +70,7 @@ fn main() -> Result<(), ()> {
         }
         .start();
 
+        // esta logica no se donde debería ir
         let msg = ServeNextTransaction {};
         while let Ok(res) = file_reader.send(msg).await {
             match res {
@@ -73,7 +84,6 @@ fn main() -> Result<(), ()> {
                 }
             }
         }
-        System::current().stop();
     });
 
     match actor_system.run() {
