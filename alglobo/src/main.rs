@@ -48,8 +48,20 @@ fn main() -> Result<(), ()> {
     let (sx, tx) = mpsc::channel();
 
     let addr = "localhost:8888".to_string();
-    let write_stream = UdpSocket::bind(addr.clone()).expect("could not bind to addr");
-    let read_stream = write_stream.try_clone().unwrap();
+    let write_stream: UdpSocket;
+    let read_stream: UdpSocket;
+    if let Ok(wsock) = UdpSocket::bind(addr) {
+        write_stream = wsock;
+        if let Ok(rsock) = write_stream.try_clone() {
+            read_stream = rsock;
+        } else {
+            //logear error
+            exit(1);
+        }
+    } else {
+        //logear error
+        exit(1);
+    }
 
     let mut entity_addresses = HashMap::new();
 
@@ -62,12 +74,15 @@ fn main() -> Result<(), ()> {
     let sender_arbiter = Arbiter::new();
     let receiver_arbiter = Arbiter::new();
 
-    let local_sender = channel_sender.clone();
+    let local_sender = channel_sender;//.clone();
 
     // (id, estado)
     let sender_execution = async move {
         let sender_addr = EntitySender::new(write_stream, entity_addresses).start();
-        local_sender.lock().unwrap().send(sender_addr).unwrap();
+        let r = local_sender.lock().unwrap().send(sender_addr);
+        if r.is_err() {
+            //logear error (y salir?)
+        }
     };
 
     let receiver_execution = async move {

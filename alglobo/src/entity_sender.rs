@@ -52,9 +52,9 @@ impl Handler<ServeTransaction> for EntitySender {
             let addr = &self.address_map[&entity];
             let data_buffer: Vec<u8> = data.into();
             println!("[MESSENGER] sending data");
-            self.stream
-                .send_to(data_buffer.as_slice(), addr)
-                .expect("falle XD");
+            let _r = self.stream.send_to(data_buffer.as_slice(), addr);
+            //en caso de que falle el socket tendriamos que agregarlo a
+            //las transacciones fallidas y hacerla otra vez?
         }
     }
 }

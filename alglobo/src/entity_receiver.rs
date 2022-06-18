@@ -24,7 +24,7 @@ pub struct ReceiveEntityResponse {}
 impl Handler<ReceiveEntityResponse> for EntityReceiver {
     type Result = ();
 
-    fn handle(&mut self, msg: ReceiveEntityResponse, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: ReceiveEntityResponse, ctx: &mut Self::Context) -> Self::Result {
         let mut buf = [0u8; 16];
         if let Ok((_, addr)) = self.stream.recv_from(&mut buf) {
             println!("[De {}] Recibi: {:?}", addr, buf);
