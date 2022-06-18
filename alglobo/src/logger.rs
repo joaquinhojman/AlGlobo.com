@@ -3,7 +3,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::SystemTime;
-use std::sync::{mpsc, Arc, Mutex};
+use actix::{Actor, Context, Handler, Message};
 
 #[derive(Clone, Debug)]
 pub struct DateTime {
@@ -98,12 +98,12 @@ fn seconds_to_datetime(ts: i64, tm: &mut DateTime) {
 }
 
 pub struct Logger {
-    mutex: Arc<Mutex<File>>
+    file: File
 }
 
 impl Logger {
     pub fn new(file: &str) -> Self {
-        let mut output: File;
+        let output: File;
         match OpenOptions::new().append(true).open(file.clone()) {
             Ok(file) => {
                 output = file;
@@ -113,22 +113,44 @@ impl Logger {
                     output = file;
                 }
                 Err(_) => {
+                    println!("voy a panickear");
                     panic!();
                 }
             },
         }
-        Logger { mutex: Arc::new(Mutex::new(output)) }
+        Logger { file: output }
     }
     
     pub fn log(&mut self, msg: String) {
-        let mut output = self.mutex.lock().unwrap();
         let mut tm = DateTime::new();
         if let Ok(n) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
             let n_secs = n.as_secs() as i64;
             seconds_to_datetime(n_secs, &mut tm);
         }
-        let _r = writeln!(output, "{} LOG: {:?}", tm, msg);
+        let _r = writeln!(self.file, "{} LOG: {:?}", tm, msg);
     }
 }
 
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct LogMessage {
+    message: String,
+}
 
+impl LogMessage {
+    pub fn new(log: String) -> Self {
+        LogMessage { message: log }
+    }
+}
+
+impl Actor for Logger {
+    type Context = Context<Self>;
+}
+
+impl Handler<LogMessage> for Logger {
+    type Result = ();
+
+    fn handle(&mut self, log_message: LogMessage, _ctx: &mut Self::Context) -> Self::Result {
+        self.log(log_message.message);
+    }
+}

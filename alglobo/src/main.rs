@@ -8,6 +8,7 @@ mod statistics_handler;
 mod transaction_dispatcher;
 
 use crate::logger::Logger;
+use crate::logger::LogMessage;
 use file_reader::FileReader;
 use std::collections::HashMap;
 use transaction_dispatcher::TransactionDispatcher;
@@ -21,21 +22,34 @@ use alglobo_common_utils::entity_type::EntityType;
 use std::env::args;
 use std::net::UdpSocket;
 use std::process::exit;
-use std::ptr::write;
 use std::sync::{mpsc, Arc, Mutex};
 
-const EINVAL_ARGS: &str = "Invalid arguments";
-
+//const EINVAL_ARGS: &str = "Invalid arguments";
 
 fn main() -> Result<(), ()> {
     
     let actor_system = System::new();
     
-    let mut logger = Logger::new("logf.log");
+    //Inicializacion del Actor Logger
+    let (sx_l, tx_l) = mpsc::channel();
+    let logger_sender = Arc::new(Mutex::new(sx_l));
+    let logger_arbiter = Arbiter::new();
+    let logger_execution = async move {
+        let logger_addr = Logger::new("logf.log").start();
+        let _r = logger_sender.lock().unwrap().send(logger_addr);
+    };
+    logger_arbiter.spawn(logger_execution);
+    let logger_addr = tx_l.recv().unwrap();
 
-    logger.log("funciona".to_string());
+    logger_addr.do_send(LogMessage::new(
+        "Logger inicializado"
+    .to_string()));
+
     let argv = args().collect::<Vec<String>>();
     if argv.len() != 2 {
+        logger_addr.do_send(LogMessage::new(
+            "ERROR: Parametros incorrectos"
+        .to_string()));    
         exit(1);
     }
 
@@ -51,11 +65,15 @@ fn main() -> Result<(), ()> {
         if let Ok(rsock) = write_stream.try_clone() {
             read_stream = rsock;
         } else {
-            //logear error
+            logger_addr.do_send(LogMessage::new(
+                "ERROR clonando write_stream"
+            .to_string()));   
             exit(1);
         }
     } else {
-        //logear error
+        logger_addr.do_send(LogMessage::new(
+            "ERROR bindeando en address localhost:8888"
+        .to_string()));           
         exit(1);
     }
 
