@@ -1,9 +1,9 @@
+use actix::{Actor, Context, Handler, Message};
 use std::fmt;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::time::SystemTime;
-use actix::{Actor, Context, Handler, Message};
 
 #[derive(Clone, Debug)]
 pub struct DateTime {
@@ -98,7 +98,7 @@ fn seconds_to_datetime(ts: i64, tm: &mut DateTime) {
 }
 
 pub struct Logger {
-    file: File
+    file: File,
 }
 
 impl Logger {
@@ -120,7 +120,7 @@ impl Logger {
         }
         Logger { file: output }
     }
-    
+
     pub fn log(&mut self, msg: String) {
         let mut tm = DateTime::new();
         if let Ok(n) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {

@@ -1,4 +1,5 @@
-use crate::transaction_dispatcher::{ReceiveTransaction, TransactionDispatcher};
+use crate::LogMessage;
+use crate::{transaction_dispatcher::{ReceiveTransaction, TransactionDispatcher}, logger::Logger};
 use actix::{Actor, Addr, Context, Handler, Message};
 use std::fs::File;
 
@@ -8,16 +9,20 @@ use csv::{Reader, StringRecord};
 pub struct FileReader {
     transaction_file_handle: Reader<File>,
     transaction_dispatcher: Addr<TransactionDispatcher>,
+    logger: Addr<Logger>,
 }
 
 impl FileReader {
     pub fn new(
         transaction_file_path: String,
         transaction_dispatcher: Addr<TransactionDispatcher>,
+        logger: Addr<Logger>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
+        logger.do_send(LogMessage::new("Creating FileReader...".to_string()));
         Ok(FileReader {
             transaction_file_handle: Reader::from_path(transaction_file_path)?,
             transaction_dispatcher,
+            logger 
         })
     }
 }
@@ -46,6 +51,7 @@ impl Handler<ServeNextTransaction> for FileReader {
             Ok(any_left) => {
                 if any_left {
                     let response = ReceiveTransaction::new(record);
+                    self.logger.do_send(LogMessage::new("FileReader: Sending to transaction_dispatcher".to_string()));
                     self.transaction_dispatcher.do_send(response);
                     return ReadStatus::KeepReading;
                 }

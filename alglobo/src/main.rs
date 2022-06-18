@@ -7,8 +7,8 @@ mod logger;
 mod statistics_handler;
 mod transaction_dispatcher;
 
-use crate::logger::Logger;
 use crate::logger::LogMessage;
+use crate::logger::Logger;
 use file_reader::FileReader;
 use std::collections::HashMap;
 use transaction_dispatcher::TransactionDispatcher;
@@ -27,9 +27,8 @@ use std::sync::{mpsc, Arc, Mutex};
 //const EINVAL_ARGS: &str = "Invalid arguments";
 
 fn main() -> Result<(), ()> {
-    
     let actor_system = System::new();
-    
+
     //Inicializacion del Actor Logger
     let (sx_l, tx_l) = mpsc::channel();
     let logger_sender = Arc::new(Mutex::new(sx_l));
@@ -41,15 +40,11 @@ fn main() -> Result<(), ()> {
     logger_arbiter.spawn(logger_execution);
     let logger_addr = tx_l.recv().unwrap();
 
-    logger_addr.do_send(LogMessage::new(
-        "Logger inicializado"
-    .to_string()));
+    logger_addr.do_send(LogMessage::new("Logger inicializado".to_string()));
 
     let argv = args().collect::<Vec<String>>();
     if argv.len() != 2 {
-        logger_addr.do_send(LogMessage::new(
-            "ERROR: Parametros incorrectos"
-        .to_string()));    
+        logger_addr.do_send(LogMessage::new("ERROR: Parametros incorrectos".to_string()));
         exit(1);
     }
 
@@ -65,15 +60,13 @@ fn main() -> Result<(), ()> {
         if let Ok(rsock) = write_stream.try_clone() {
             read_stream = rsock;
         } else {
-            logger_addr.do_send(LogMessage::new(
-                "ERROR clonando write_stream"
-            .to_string()));   
+            logger_addr.do_send(LogMessage::new("ERROR clonando write_stream".to_string()));
             exit(1);
         }
     } else {
         logger_addr.do_send(LogMessage::new(
-            "ERROR bindeando en address localhost:8888"
-        .to_string()));           
+            "ERROR bindeando en address localhost:8888".to_string(),
+        ));
         exit(1);
     }
 
@@ -82,25 +75,28 @@ fn main() -> Result<(), ()> {
     entity_addresses.insert(EntityType::Hotel, "localhost:1234".to_string());
     entity_addresses.insert(EntityType::Bank, "localhost:1235".to_string());
     entity_addresses.insert(EntityType::Airline, "localhost:1236".to_string());
+    logger_addr.do_send(LogMessage::new(format!("entity_addresses: {:?}", entity_addresses)));
 
     let channel_sender = Arc::new(Mutex::new(sx));
 
     let sender_arbiter = Arbiter::new();
     let receiver_arbiter = Arbiter::new();
 
-    let local_sender = channel_sender;//.clone();
+    let local_sender = channel_sender; //.clone();
 
     // (id, estado)
+    let log_c = logger_addr.clone();
     let sender_execution = async move {
-        let sender_addr = EntitySender::new(write_stream, entity_addresses).start();
+        let sender_addr = EntitySender::new(write_stream, entity_addresses, log_c).start();
         let r = local_sender.lock().unwrap().send(sender_addr);
         if r.is_err() {
             //logear error (y salir?)
         }
     };
 
+    let log_c = logger_addr.clone();
     let receiver_execution = async move {
-        let addr = EntityReceiver::new(read_stream).start();
+        let addr = EntityReceiver::new(read_stream, log_c).start();
         addr.do_send(ReceiveEntityResponse {});
     };
 
@@ -109,28 +105,34 @@ fn main() -> Result<(), ()> {
 
     let entity_addr = tx.recv().unwrap();
 
+    let log_c = logger_addr.clone();
+    let log_c2 = logger_addr.clone();
     actor_system.block_on(async {
-        let transaction_dispatcher = TransactionDispatcher::new(entity_addr).start();
-        let file_reader = match FileReader::new(file_path, transaction_dispatcher) {
+        let transaction_dispatcher = TransactionDispatcher::new(entity_addr, log_c2).start();
+        let file_reader = match FileReader::new(file_path, transaction_dispatcher, log_c) {
             Ok(file_reader) => file_reader,
             Err(e) => {
-                eprintln!("{}", e);
-                panic!();
+                logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
+                exit(1);
             }
         }
         .start();
 
         // esta logica no se donde debería ir
         let msg = ServeNextTransaction {};
+        logger_addr.do_send(LogMessage::new("Lets read the file...".to_string()));
         while let Ok(res) = file_reader.send(msg).await {
             match res {
-                ReadStatus::KeepReading => {}
+                ReadStatus::KeepReading => {
+                    logger_addr.do_send(LogMessage::new("KeepReading".to_string()));
+                }
                 ReadStatus::Eof => {
+                    logger_addr.do_send(LogMessage::new("EOF".to_string()));
                     break;
                 }
                 ReadStatus::ParseError(e) => {
-                    eprintln!("{}", e);
-                    panic!()
+                    logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
+                    exit(1);
                 }
             }
         }
@@ -139,7 +141,7 @@ fn main() -> Result<(), ()> {
     match actor_system.run() {
         Ok(_) => {}
         Err(e) => {
-            eprintln!("{}", e);
+            logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
             return Err(());
         }
     }

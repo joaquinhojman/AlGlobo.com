@@ -1,3 +1,5 @@
+use crate::LogMessage;
+use crate::Logger;
 use crate::entity_sender::{EntitySender, ServeTransaction};
 use actix::{Actor, Addr, Context, Handler, Message};
 use alglobo_common_utils::transaction_request::TransactionRequest;
@@ -11,11 +13,13 @@ const HEADER_AIRLINE: &str = "airline_cost";
 
 pub struct TransactionDispatcher {
     messenger: Addr<EntitySender>,
+    logger: Addr<Logger>,
 }
 
 impl TransactionDispatcher {
-    pub fn new(messenger: Addr<EntitySender>) -> Self {
-        TransactionDispatcher { messenger }
+    pub fn new(messenger: Addr<EntitySender>, logger: Addr<Logger>) -> Self {
+        logger.do_send(LogMessage::new("Creating TransactionDispatcher...".to_string()));
+        TransactionDispatcher { messenger, logger }
     }
 }
 
@@ -34,9 +38,10 @@ impl ReceiveTransaction {
         ReceiveTransaction { transaction }
     }
 
-    pub fn deserialize(&self) -> TransactionRequest {
+    pub fn deserialize(&self, logger: &Addr<Logger> ) -> TransactionRequest {
         let header = StringRecord::from(vec![HEADER_ID, HEADER_HOTEL, HEADER_BANK, HEADER_AIRLINE]);
         let raw_transaction = self.transaction.clone();
+        logger.do_send(LogMessage::new(format!("deserialize: {:?}", raw_transaction)));
         match raw_transaction.deserialize(Some(&header)) {
             Ok(transaction) => transaction,
             Err(e) => {
@@ -54,8 +59,9 @@ impl Handler<ReceiveTransaction> for TransactionDispatcher {
         raw_transaction: ReceiveTransaction,
         _ctx: &mut Self::Context,
     ) -> Self::Result {
-        let transaction = raw_transaction.deserialize();
+        let transaction = raw_transaction.deserialize(&self.logger);
         let msg = ServeTransaction::new(transaction);
+        self.logger.do_send(LogMessage::new("[DISPATCHER] sending to messenger".to_string()));
         println!("[DISPATCHER] sending to messenger");
         let _ = self.messenger.do_send(msg);
     }
