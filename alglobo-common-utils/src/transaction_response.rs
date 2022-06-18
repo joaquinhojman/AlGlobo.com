@@ -8,8 +8,8 @@ pub struct TransactionResponse {
 impl TransactionResponse {
     pub fn new(transaction_id: u64, transaction_state: TransactionState) -> Self {
         TransactionResponse {
-            _transaction_id : transaction_id,
-            _transaction_state : transaction_state,
+            _transaction_id: transaction_id,
+            _transaction_state: transaction_state,
         }
     }
 }
