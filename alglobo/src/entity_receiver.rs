@@ -12,7 +12,7 @@ pub struct EntityReceiver {
 impl EntityReceiver {
     pub fn new(stream: UdpSocket, logger: Addr<Logger>) -> Self {
         logger.do_send(LogMessage::new("Creating EntityReceiver...".to_string()));
-        EntityReceiver { stream, logger}
+        EntityReceiver { stream, logger }
     }
 }
 
@@ -31,7 +31,8 @@ impl Handler<ReceiveEntityResponse> for EntityReceiver {
     fn handle(&mut self, _msg: ReceiveEntityResponse, ctx: &mut Self::Context) -> Self::Result {
         let mut buf = [0u8; 16];
         if let Ok((_, addr)) = self.stream.recv_from(&mut buf) {
-            self.logger.do_send(LogMessage::new(format!("[De {}] Recibi: {:?}", addr, buf)));
+            self.logger
+                .do_send(LogMessage::new(format!("[De {}] Recibi: {:?}", addr, buf)));
             println!("[De {}] Recibi: {:?}", addr, buf);
         }
         ctx.address().do_send(ReceiveEntityResponse {});

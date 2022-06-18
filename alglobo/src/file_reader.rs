@@ -1,5 +1,8 @@
 use crate::LogMessage;
-use crate::{transaction_dispatcher::{ReceiveTransaction, TransactionDispatcher}, logger::Logger};
+use crate::{
+    logger::Logger,
+    transaction_dispatcher::{ReceiveTransaction, TransactionDispatcher},
+};
 use actix::{Actor, Addr, Context, Handler, Message};
 use std::fs::File;
 
@@ -22,7 +25,7 @@ impl FileReader {
         Ok(FileReader {
             transaction_file_handle: Reader::from_path(transaction_file_path)?,
             transaction_dispatcher,
-            logger 
+            logger,
         })
     }
 }
@@ -51,7 +54,9 @@ impl Handler<ServeNextTransaction> for FileReader {
             Ok(any_left) => {
                 if any_left {
                     let response = ReceiveTransaction::new(record);
-                    self.logger.do_send(LogMessage::new("FileReader: Sending to transaction_dispatcher".to_string()));
+                    self.logger.do_send(LogMessage::new(
+                        "FileReader: Sending to transaction_dispatcher".to_string(),
+                    ));
                     self.transaction_dispatcher.do_send(response);
                     return ReadStatus::KeepReading;
                 }

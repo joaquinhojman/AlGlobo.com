@@ -1,15 +1,15 @@
 use crate::transaction_state::TransactionState;
 
 pub struct TransactionResponse {
-    transaction_id: u64,
-    transaction_state: TransactionState,
+    _transaction_id: u64,
+    _transaction_state: TransactionState,
 }
 
 impl TransactionResponse {
     pub fn new(transaction_id: u64, transaction_state: TransactionState) -> Self {
         TransactionResponse {
-            transaction_id,
-            transaction_state,
+            _transaction_id : transaction_id,
+            _transaction_state : transaction_state,
         }
     }
 }

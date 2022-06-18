@@ -75,7 +75,10 @@ fn main() -> Result<(), ()> {
     entity_addresses.insert(EntityType::Hotel, "localhost:1234".to_string());
     entity_addresses.insert(EntityType::Bank, "localhost:1235".to_string());
     entity_addresses.insert(EntityType::Airline, "localhost:1236".to_string());
-    logger_addr.do_send(LogMessage::new(format!("entity_addresses: {:?}", entity_addresses)));
+    logger_addr.do_send(LogMessage::new(format!(
+        "entity_addresses: {:?}",
+        entity_addresses
+    )));
 
     let channel_sender = Arc::new(Mutex::new(sx));
 

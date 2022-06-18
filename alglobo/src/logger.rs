@@ -104,11 +104,11 @@ pub struct Logger {
 impl Logger {
     pub fn new(file: &str) -> Self {
         let output: File;
-        match OpenOptions::new().append(true).open(file.clone()) {
+        match OpenOptions::new().append(true).open(file) {
             Ok(file) => {
                 output = file;
             }
-            Err(_) => match File::create(file.clone()) {
+            Err(_) => match File::create(file) {
                 Ok(file) => {
                     output = file;
                 }
