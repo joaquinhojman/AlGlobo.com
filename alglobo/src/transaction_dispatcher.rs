@@ -1,4 +1,4 @@
-use crate::entity_sender::{EntitySender, ServeTransaction};
+use crate::entity_sender::{EntitySender, PrepareTransaction};
 use actix::{Actor, Addr, Context, Handler, Message};
 use alglobo_common_utils::transaction_request::TransactionRequest;
 
@@ -55,8 +55,7 @@ impl Handler<ReceiveTransaction> for TransactionDispatcher {
         _ctx: &mut Self::Context,
     ) -> Self::Result {
         let transaction = raw_transaction.deserialize();
-        let msg = ServeTransaction::new(transaction);
-        println!("[DISPATCHER] sending to messenger");
+        let msg = PrepareTransaction::new(transaction);
         let _ = self.messenger.do_send(msg);
     }
 }

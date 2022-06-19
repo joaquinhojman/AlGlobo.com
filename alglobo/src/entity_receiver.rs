@@ -1,14 +1,22 @@
-use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, Running};
-use actix_rt::ArbiterHandle;
+use actix::{Actor, Addr, AsyncContext, Context, Handler, Message};
+use alglobo_common_utils::transaction_response::{
+    TransactionResponse, TRANSACTION_RESPONSE_PAYLOAD_SIZE,
+};
 use std::net::UdpSocket;
+
+use crate::transaction_coordinator::{TransactionCoordinator, TransactionUpdate};
 
 pub struct EntityReceiver {
     stream: UdpSocket,
+    transaction_coordinator: Addr<TransactionCoordinator>,
 }
 
 impl EntityReceiver {
-    pub fn new(stream: UdpSocket) -> Self {
-        EntityReceiver { stream }
+    pub fn new(stream: UdpSocket, transaction_coordinator: Addr<TransactionCoordinator>) -> Self {
+        EntityReceiver {
+            stream,
+            transaction_coordinator,
+        }
     }
 }
 
@@ -25,10 +33,12 @@ impl Handler<ReceiveEntityResponse> for EntityReceiver {
     type Result = ();
 
     fn handle(&mut self, msg: ReceiveEntityResponse, ctx: &mut Self::Context) -> Self::Result {
-        let mut buf = [0u8; 16];
-        if let Ok((_, addr)) = self.stream.recv_from(&mut buf) {
-            println!("[De {}] Recibi: {:?}", addr, buf);
+        let mut buf = [0u8; TRANSACTION_RESPONSE_PAYLOAD_SIZE];
+        if let Ok((_, _)) = self.stream.recv_from(&mut buf) {
+            let res: TransactionResponse = buf.to_vec().into();
+            self.transaction_coordinator
+                .do_send(TransactionUpdate::new(res));
         }
-        ctx.address().do_send(ReceiveEntityResponse {});
+        ctx.address().do_send(msg);
     }
 }
