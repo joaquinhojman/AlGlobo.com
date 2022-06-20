@@ -75,17 +75,19 @@ impl Handler<TransactionUpdate> for TransactionCoordinator {
         self.logger
         .do_send(LogMessage::new(format!("[TransactionUpdate] entity_states: {:?}", v)));
         if v.len() == 3 && (v.iter().all(|opt| opt.is_some())) {
-            // si llegue acá mando el estado nuevo de la transaccion
-            // este unwrap es correcto ya que sabemos que el vector tiene 3 options con some
-            let tx = self
-                .transaction_update_listening_channels
-                .remove(&msg.transaction_response.transaction_id);
-            let v = self
-                .entity_states
-                .remove(&msg.transaction_response.transaction_id);
-            if let Some(vec) = v {
-                // si fallo se droppeo el receiver, con lo cual se llego al timeout, y por ende hay que abortar la transaccion
-                if let Some(tx) = tx {
+            // unico caso en el que hay que mandar por el canal es cuando estamos esperando
+            // ergo, esto solo vale en la fase de Prepare
+            if let None | Some(&TransactionState::Wait) = self.transaction_log.get(&msg.transaction_response.transaction_id) {
+                // si llegue acá mando el estado nuevo de la transaccion
+                // este unwrap es correcto ya que sabemos que el vector tiene 3 options con some
+                let tx = self
+                    .transaction_update_listening_channels
+                    .remove(&msg.transaction_response.transaction_id);
+                let v = self
+                    .entity_states
+                    .remove(&msg.transaction_response.transaction_id);
+                if let (Some(vec), Some(tx)) = (v, tx)  {
+                    // si fallo se droppeo el receiver, con lo cual se llego al timeout, y por ende se aborto la transaccion
                     let _ = tx.send(vec);
                 }
             }
@@ -133,59 +135,61 @@ impl Handler<WaitTransactionStateResponse> for TransactionCoordinator {
         msg: WaitTransactionStateResponse,
         _ctx: &mut Self::Context,
     ) -> Self::Result {
-        let (tx, rx) = oneshot::channel();
-        self.transaction_log
-            .insert(msg.transaction_id, msg.transaction_state);
-        self.transaction_update_listening_channels
-            .insert(msg.transaction_id, tx);
-        let fut = async move {
-            match timeout(Duration::from_secs(TIMEOUT_S), rx).await {
-                Ok(x) => {
-                    if let Ok(mut v) = x {
-                        let all_states_match = v.iter().all(|opt| {
-                            // no es bonito pero funciona
-                            std::mem::discriminant(&msg.expected_transaction_state)
-                                == std::mem::discriminant(&opt.as_ref().unwrap())
-                        });
-                        if all_states_match {
-                            let state = v.remove(0).unwrap();
-                            // self.transaction_log.insert(msg.transaction_id, state);
-                            msg.sender_addr.do_send(BroadcastTransactionState::new(
-                                msg.transaction_id,
-                                state,
-                                msg.should_await_next_response,
-                            ));
-                            (msg.transaction_id, state)
+        // si la contenia, entonces ya registramos esta transaccion
+        // con lo cual no hace falta esperar a timeout (asumiendo que no se falla en la fase de commit)
+        if self.transaction_log.contains_key(&msg.transaction_id) {
+            Box::pin(std::future::ready(()).into_actor(self))
+        } else {
+            let (tx, rx) = oneshot::channel();
+            self.transaction_log
+                .insert(msg.transaction_id, msg.transaction_state);
+            self.transaction_update_listening_channels
+                .insert(msg.transaction_id, tx);
+            let fut = async move {
+                match timeout(Duration::from_secs(TIMEOUT_S), rx).await {
+                    Ok(x) => {
+                        if let Ok(mut v) = x {
+                            let all_states_match = v.iter().all(|opt| {
+                                // no es bonito pero funciona
+                                std::mem::discriminant(&msg.expected_transaction_state)
+                                    == std::mem::discriminant(&opt.as_ref().unwrap())
+                            });
+                            if all_states_match {
+                                let state = v.remove(0).unwrap();
+                                // self.transaction_log.insert(msg.transaction_id, state);
+                                msg.sender_addr.do_send(BroadcastTransactionState::new(
+                                    msg.transaction_id,
+                                    state
+                                ));
+                                (msg.transaction_id, state)
+                            } else {
+                                msg.sender_addr.do_send(BroadcastTransactionState::new(
+                                    msg.transaction_id,
+                                    TransactionState::Abort
+                                ));
+                                (msg.transaction_id, TransactionState::Abort)
+                            }
                         } else {
                             msg.sender_addr.do_send(BroadcastTransactionState::new(
                                 msg.transaction_id,
-                                TransactionState::Abort,
-                                msg.should_await_next_response,
+                                TransactionState::Abort
                             ));
                             (msg.transaction_id, TransactionState::Abort)
                         }
-                    } else {
+                    }
+                    Err(_) => {
+                        println!("timeout reached");
                         msg.sender_addr.do_send(BroadcastTransactionState::new(
                             msg.transaction_id,
-                            TransactionState::Abort,
-                            msg.should_await_next_response,
+                            TransactionState::Abort
                         ));
                         (msg.transaction_id, TransactionState::Abort)
                     }
                 }
-                Err(_) => {
-                    println!("timeout reached");
-                    msg.sender_addr.do_send(BroadcastTransactionState::new(
-                        msg.transaction_id,
-                        TransactionState::Abort,
-                        msg.should_await_next_response,
-                    ));
-                    (msg.transaction_id, TransactionState::Abort)
-                }
-            }
-        };
-        Box::pin(fut.into_actor(self).map(|(id, state), me, _| {
-            me.transaction_log.insert(id, state);
-        }))
+            };
+            Box::pin(fut.into_actor(self).map(|(id, state), me, _| {
+                me.transaction_log.insert(id, state);
+            }))
+        }
     }
 }

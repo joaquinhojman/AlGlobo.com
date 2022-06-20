@@ -6,7 +6,7 @@ import random
 
 HEADER = 'id,hotel_cost,bank_cost,airline_cost\n'
 FILE_PATH = 'transactions.csv'
-NUM_TRANSACTIONS = 100000
+NUM_TRANSACTIONS = 1000000
 MIN_COST = 1000
 MAX_COST = 2000
 

@@ -127,20 +127,19 @@ impl Handler<PrepareTransaction> for EntitySender {
 #[rtype(result = "()")]
 pub struct BroadcastTransactionState {
     transaction_id: u64,
-    transaction_state: TransactionState,
-    should_await_next_response: bool,
+    transaction_state: TransactionState
 }
 
+// este broadcast sirve para Abort o Commited (si se dispara este handler, significa que recibimos
+// o un commit o un abort para esa transaccion)
 impl BroadcastTransactionState {
     pub fn new(
         transaction_id: u64,
-        transaction_state: TransactionState,
-        should_await_next_response: bool,
+        transaction_state: TransactionState
     ) -> Self {
         BroadcastTransactionState {
             transaction_id,
-            transaction_state,
-            should_await_next_response,
+            transaction_state
         }
     }
 }
@@ -149,29 +148,19 @@ impl Handler<BroadcastTransactionState> for EntitySender {
     type Result = ();
 
     fn handle(&mut self, msg: BroadcastTransactionState, ctx: &mut Self::Context) -> Self::Result {
-        // si no esperamos a la proxima respuesta, significa que ya esta resuelta (commited o aborted)
+        // si nos llamaron aca, la transaccion ya resolvió su estado (o fue abortada o commiteada)
         // esto es asi porque asumimos que no se puede fallar en la fase de commit (tal cual lo hace el algoritmo)
-        if msg.should_await_next_response {
-            self.coordinator_addr
-                .do_send(WaitTransactionStateResponse::new(
-                    msg.transaction_id,
-                    msg.transaction_state,
-                    msg.transaction_state,
-                    ctx.address(),
-                    false,
-                ));
-            let instant = self
-                .transaction_timestamps
-                .get_mut(&msg.transaction_id)
-                .unwrap();
-            let duration = instant.elapsed();
-            self.statistics_handler
-                .do_send(UnregisterTransaction::new(msg.transaction_id, duration))
-        }
+        let instant = self
+            .transaction_timestamps
+            .get_mut(&msg.transaction_id)
+            .unwrap();
+        let duration = instant.elapsed();
+        self.statistics_handler
+            .do_send(UnregisterTransaction::new(msg.transaction_id, duration));
+        self.broadcast_state(msg.transaction_id, msg.transaction_state);
         self.logger.do_send(LogMessage::new(format!(
             "[EntitySender] broadcast_state transaction id: {}",
             msg.transaction_id
         )));
-        self.broadcast_state(msg.transaction_id, msg.transaction_state)
     }
 }
