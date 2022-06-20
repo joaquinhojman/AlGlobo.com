@@ -1,5 +1,7 @@
 use crate::entity_sender::BroadcastTransactionState;
 use crate::EntitySender;
+use crate::LogMessage;
+use crate::Logger;
 use actix::{
     Actor, ActorFutureExt, Addr, Context, Handler, Message, ResponseActFuture, WrapFuture,
 };
@@ -17,14 +19,19 @@ pub struct TransactionCoordinator {
     transaction_log: HashMap<u64, TransactionState>,
     transaction_update_listening_channels: HashMap<u64, Sender<Vec<Option<TransactionState>>>>,
     entity_states: HashMap<u64, Vec<Option<TransactionState>>>,
+    logger: Addr<Logger>,
 }
 
 impl TransactionCoordinator {
-    pub fn new() -> Self {
+    pub fn new(logger: Addr<Logger>) -> Self {
+        logger.do_send(LogMessage::new(
+            "Creating TransactionCoordinator...".to_string(),
+        ));
         TransactionCoordinator {
             transaction_log: HashMap::new(),
             transaction_update_listening_channels: HashMap::new(),
             entity_states: HashMap::new(),
+            logger: logger,
         }
     }
 }
@@ -50,7 +57,7 @@ impl TransactionUpdate {
 impl Handler<TransactionUpdate> for TransactionCoordinator {
     type Result = ();
 
-    fn handle(&mut self, msg: TransactionUpdate, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: TransactionUpdate, _ctx: &mut Self::Context) -> Self::Result {
         let v = match self
             .entity_states
             .get_mut(&msg.transaction_response.transaction_id)
@@ -65,6 +72,8 @@ impl Handler<TransactionUpdate> for TransactionCoordinator {
             }
         };
         v.push(Some(msg.transaction_response.transaction_state));
+        self.logger
+        .do_send(LogMessage::new(format!("[TransactionUpdate] entity_states: {:?}", v)));
         if v.len() == 3 && (v.iter().all(|opt| opt.is_some())) {
             // si llegue acá mando el estado nuevo de la transaccion
             // este unwrap es correcto ya que sabemos que el vector tiene 3 options con some

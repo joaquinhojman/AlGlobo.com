@@ -86,7 +86,8 @@ fn main() -> Result<(), ()> {
     actor_system.block_on(async {
         let statistics_handler_addr = StatisticsHandler::new().start();
         statistics_handler_addr.do_send(LogPeriodically {});
-        let coordinator_addr = TransactionCoordinator::new().start();
+        let log_c = logger_addr.clone();
+        let coordinator_addr = TransactionCoordinator::new(log_c).start();
 
         let channel_sender = Arc::new(Mutex::new(sx));
 

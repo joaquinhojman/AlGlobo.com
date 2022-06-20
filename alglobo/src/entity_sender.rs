@@ -47,9 +47,15 @@ impl EntitySender {
 
     fn broadcast_new_transaction(&self, transaction: &TransactionRequest) {
         let v = transaction.get_entities_data();
+        self.logger
+            .do_send(LogMessage::new(format!("entities_data: {:?}", v)));
         for (entity, data) in v {
             let addr = &self.address_map[&entity];
             let data_buffer: Vec<u8> = data.into();
+            self.logger.do_send(LogMessage::new(format!(
+                "[MESSENGER] sending data: {:?}",
+                data_buffer.clone()
+            )));
             self.stream
                 .send_to(data_buffer.as_slice(), addr)
                 .expect("falle XD");
@@ -96,7 +102,7 @@ impl Handler<PrepareTransaction> for EntitySender {
     fn handle(&mut self, msg: PrepareTransaction, ctx: &mut Self::Context) -> Self::Result {
         // registramos primero que vamos a esperar a esta transaccion
         // TODO: fix race condition
-        let r = self
+        let _r = self
             .coordinator_addr
             .do_send(WaitTransactionStateResponse::new(
                 msg.transaction.get_transaction_id(),
@@ -105,19 +111,15 @@ impl Handler<PrepareTransaction> for EntitySender {
                 ctx.address(),
                 true,
             ));
+        self.logger.do_send(LogMessage::new(
+            "[EntitySender] broadcast_new_transaction".to_string(),
+        ));
         self.broadcast_new_transaction(&msg.transaction);
         self.transaction_timestamps
             .insert(msg.transaction.get_transaction_id(), Instant::now());
         self.statistics_handler.do_send(RegisterTransaction::new(
             msg.transaction.get_transaction_id(),
         ));
-        // TODO: ver como loggear
-        /*self.logger
-            .do_send(LogMessage::new(format!("entities_data: {:?}", v)));
-        self.logger.do_send(LogMessage::new(format!(
-            "[MESSENGER] sending data: {:?}",
-            data_buffer.clone()
-         */
     }
 }
 
@@ -166,6 +168,10 @@ impl Handler<BroadcastTransactionState> for EntitySender {
             self.statistics_handler
                 .do_send(UnregisterTransaction::new(msg.transaction_id, duration))
         }
+        self.logger.do_send(LogMessage::new(format!(
+            "[EntitySender] broadcast_state transaction id: {}",
+            msg.transaction_id
+        )));
         self.broadcast_state(msg.transaction_id, msg.transaction_state)
     }
 }
