@@ -5,6 +5,7 @@ mod entity_sender;
 mod file_reader;
 mod logger;
 mod statistics_handler;
+mod transaction_coordinator;
 mod transaction_dispatcher;
 
 use crate::logger::LogMessage;
@@ -16,6 +17,8 @@ use transaction_dispatcher::TransactionDispatcher;
 use crate::entity_receiver::{EntityReceiver, ReceiveEntityResponse};
 use crate::entity_sender::EntitySender;
 use crate::file_reader::{ReadStatus, ServeNextTransaction};
+use crate::statistics_handler::{LogPeriodically, StatisticsHandler};
+use crate::transaction_coordinator::TransactionCoordinator;
 use actix::Actor;
 use actix_rt::{Arbiter, System};
 use alglobo_common_utils::entity_type::EntityType;
@@ -80,38 +83,52 @@ fn main() -> Result<(), ()> {
         entity_addresses
     )));
 
-    let channel_sender = Arc::new(Mutex::new(sx));
-
-    let sender_arbiter = Arbiter::new();
-    let receiver_arbiter = Arbiter::new();
-
-    let local_sender = channel_sender; //.clone();
-
-    // (id, estado)
-    let log_c = logger_addr.clone();
-    let sender_execution = async move {
-        let sender_addr = EntitySender::new(write_stream, entity_addresses, log_c).start();
-        let r = local_sender.lock().unwrap().send(sender_addr);
-        if r.is_err() {
-            //logear error (y salir?)
-        }
-    };
-
-    let log_c = logger_addr.clone();
-    let receiver_execution = async move {
-        let addr = EntityReceiver::new(read_stream, log_c).start();
-        addr.do_send(ReceiveEntityResponse {});
-    };
-
-    receiver_arbiter.spawn(receiver_execution);
-    sender_arbiter.spawn(sender_execution);
-
-    let entity_addr = tx.recv().unwrap();
-
-    let log_c = logger_addr.clone();
-    let log_c2 = logger_addr.clone();
     actor_system.block_on(async {
-        let transaction_dispatcher = TransactionDispatcher::new(entity_addr, log_c2).start();
+        let statistics_handler_addr = StatisticsHandler::new().start();
+        statistics_handler_addr.do_send(LogPeriodically {});
+        let coordinator_addr = TransactionCoordinator::new().start();
+
+        let channel_sender = Arc::new(Mutex::new(sx));
+
+        let sender_arbiter = Arbiter::new();
+        let receiver_arbiter = Arbiter::new();
+
+        let local_sender = channel_sender.clone();
+
+        let log_c = logger_addr.clone();
+
+        let coordinator_c = coordinator_addr.clone();
+        let sender_execution = async move {
+            let sender_addr = EntitySender::new(
+                write_stream,
+                entity_addresses,
+                log_c,
+                coordinator_c,
+                statistics_handler_addr,
+            )
+            .start();
+            let r = local_sender.lock().unwrap().send(sender_addr);
+            if r.is_err() {
+                //logear error (y salir?)
+            }
+        };
+
+        sender_arbiter.spawn(sender_execution);
+        let entity_addr = tx.recv().unwrap();
+
+        let coordinator_c = coordinator_addr.clone();
+        let log_c = logger_addr.clone();
+        let receiver_execution = async move {
+            let addr = EntityReceiver::new(read_stream, log_c, coordinator_c).start();
+            addr.do_send(ReceiveEntityResponse {});
+        };
+
+        receiver_arbiter.spawn(receiver_execution);
+
+        let log_c = logger_addr.clone();
+        let transaction_dispatcher = TransactionDispatcher::new(entity_addr, log_c).start();
+
+        let log_c = logger_addr.clone();
         let file_reader = match FileReader::new(file_path, transaction_dispatcher, log_c) {
             Ok(file_reader) => file_reader,
             Err(e) => {

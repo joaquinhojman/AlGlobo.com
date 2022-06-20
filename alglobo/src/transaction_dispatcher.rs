@@ -1,4 +1,4 @@
-use crate::entity_sender::{EntitySender, ServeTransaction};
+use crate::entity_sender::{EntitySender, PrepareTransaction};
 use crate::LogMessage;
 use crate::Logger;
 use actix::{Actor, Addr, Context, Handler, Message};
@@ -65,11 +65,10 @@ impl Handler<ReceiveTransaction> for TransactionDispatcher {
         _ctx: &mut Self::Context,
     ) -> Self::Result {
         let transaction = raw_transaction.deserialize(&self.logger);
-        let msg = ServeTransaction::new(transaction);
+        let msg = PrepareTransaction::new(transaction);
         self.logger.do_send(LogMessage::new(
             "[DISPATCHER] sending to messenger".to_string(),
         ));
-        println!("[DISPATCHER] sending to messenger");
         let _ = self.messenger.do_send(msg);
     }
 }

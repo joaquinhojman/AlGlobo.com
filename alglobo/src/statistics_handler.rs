@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::thread::sleep;
+
 use std::time::Duration;
 
 use actix::{
