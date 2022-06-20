@@ -1,3 +1,5 @@
+extern crate core;
+
 pub mod entity_payload;
 pub mod entity_type;
 pub mod transaction_request;
