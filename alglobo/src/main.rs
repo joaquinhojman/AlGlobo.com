@@ -80,7 +80,6 @@ fn main() -> Result<(), ()> {
         receiver_arbiter.spawn(receiver_execution);
 
         let sender_helper_addr = helper_addr.clone();
-        // (id, estado)
         let sender_execution = async move {
             let sender_addr = EntitySender::new(
                 write_stream,
@@ -121,7 +120,8 @@ fn main() -> Result<(), ()> {
                 }
             }
         }
-    };
+        actix_rt::signal::ctrl_c();
+    });
 
     match actor_system.run() {
         Ok(_) => {}

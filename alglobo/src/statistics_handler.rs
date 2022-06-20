@@ -1,10 +1,8 @@
 use std::collections::HashSet;
-use futures::future::join_all;
 use std::thread::sleep;
 use std::time::Duration;
 
 use actix::{Actor, ActorFutureExt, AsyncContext, Context, ContextFutureSpawner, Handler, Message, ResponseActFuture, WrapFuture};
-use futures::FutureExt;
 
 
 const LOG_PERIOD_S: u64 = 1;
