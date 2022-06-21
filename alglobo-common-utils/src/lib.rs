@@ -5,6 +5,7 @@ pub mod entity_type;
 pub mod transaction_request;
 pub mod transaction_response;
 pub mod transaction_state;
+pub mod entity_logger;
 
 #[cfg(test)]
 mod tests {
