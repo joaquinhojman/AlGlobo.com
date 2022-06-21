@@ -2,13 +2,16 @@ use crate::statistics_handler::{RegisterTransaction, StatisticsHandler, Unregist
 use crate::transaction_coordinator::{TransactionCoordinator, WaitTransactionStateResponse};
 use crate::LogMessage;
 use crate::Logger;
-use actix::{Actor, Context, Handler, Message};
+use actix::{Actor, ActorFutureExt, Context, Handler, Message, ResponseActFuture, WrapFuture};
 use actix::{Addr, AsyncContext};
 use alglobo_common_utils::entity_type::EntityType;
 use alglobo_common_utils::transaction_request::TransactionRequest;
 use alglobo_common_utils::transaction_state::TransactionState;
 use std::collections::HashMap;
-use std::net::UdpSocket;
+use std::future::Future;
+use tokio::net::UdpSocket;
+//use std::net::UdpSocket;
+use std::sync::Arc;
 use std::time::Instant;
 
 /*
@@ -18,7 +21,7 @@ use std::time::Instant;
 */
 
 pub struct EntitySender {
-    stream: UdpSocket,
+    stream: Arc<UdpSocket>,
     address_map: HashMap<EntityType, String>,
     logger: Addr<Logger>,
     coordinator_addr: Addr<TransactionCoordinator>,
@@ -28,7 +31,7 @@ pub struct EntitySender {
 
 impl EntitySender {
     pub fn new(
-        stream: UdpSocket,
+        stream: Arc<UdpSocket>,
         address_map: HashMap<EntityType, String>,
         logger: Addr<Logger>,
         coordinator_addr: Addr<TransactionCoordinator>,
@@ -45,24 +48,30 @@ impl EntitySender {
         }
     }
 
-    fn broadcast_new_transaction(&self, transaction: &TransactionRequest) {
+    /*
+    fn broadcast_new_transaction(&self, transaction: &TransactionRequest) -> Future<Output=()> + Send + 'static {
         let v = transaction.get_entities_data();
+        /*
         self.logger
             .do_send(LogMessage::new(format!("entities_data: {:?}", v)));
-        for (entity, data) in v {
-            let addr = &self.address_map[&entity];
-            let data_buffer: Vec<u8> = data.into();
-            self.logger.do_send(LogMessage::new(format!(
-                "[MESSENGER] sending data: {:?}",
-                data_buffer.clone()
-            )));
-            self.stream
-                .send_to(data_buffer.as_slice(), addr)
-                .expect("falle XD");
+        */
+        let write_stream = self.stream.clone();
+        let addresses = self.address_map.clone();
+        async {
+            for (entity, data) in v {
+                let addr = &addresses[&entity];
+                let data_buffer: Vec<u8> = data.into();
+                /*self.logger.do_send(LogMessage::new(format!(
+                    "[MESSENGER] sending data: {:?}",
+                    data_buffer.clone()
+                )));
+                */
+                write_stream.send_to(data_buffer.as_slice(), addr).await.expect(&*format!("{} failed", addr));
+            }
         }
-    }
+    }*/
 
-    fn broadcast_state(&self, transaction_id: u64, transaction_state: TransactionState) {
+    /*fn broadcast_state(&self, transaction_id: u64, transaction_state: TransactionState) {
         let temp_bytes = transaction_id.to_be_bytes();
         let send_buffer = temp_bytes.as_slice();
         let state_buffer: u8 = transaction_state.into();
@@ -77,7 +86,7 @@ impl EntitySender {
                 })
                 .collect::<Vec<()>>(),
         );
-    }
+    }*/
 }
 
 impl Actor for EntitySender {
@@ -97,7 +106,7 @@ impl PrepareTransaction {
 }
 
 impl Handler<PrepareTransaction> for EntitySender {
-    type Result = ();
+    type Result = ResponseActFuture<Self, ()>;
 
     fn handle(&mut self, msg: PrepareTransaction, ctx: &mut Self::Context) -> Self::Result {
         // registramos primero que vamos a esperar a esta transaccion
@@ -114,12 +123,25 @@ impl Handler<PrepareTransaction> for EntitySender {
         self.logger.do_send(LogMessage::new(
             "[EntitySender] broadcast_new_transaction".to_string(),
         ));
-        self.broadcast_new_transaction(&msg.transaction);
-        self.transaction_timestamps
-            .insert(msg.transaction.get_transaction_id(), Instant::now());
-        self.statistics_handler.do_send(RegisterTransaction::new(
-            msg.transaction.get_transaction_id(),
-        ));
+
+        let write_stream = self.stream.clone();
+        let addresses = self.address_map.clone();
+        let v = msg.transaction.get_entities_data();
+        let fut = async move {
+            for (entity, data) in v {
+                let addr = &addresses[&entity];
+                let data_buffer: Vec<u8> = data.into();
+                write_stream.send_to(data_buffer.as_slice(), addr).await.expect(&*format!("{} failed", addr));
+            }
+            msg
+        };
+
+        Box::pin(fut.into_actor(self).map(|msg, me, ctx| {
+            me.transaction_timestamps.insert(msg.transaction.get_transaction_id(), Instant::now());
+            me.statistics_handler.do_send(RegisterTransaction::new(
+                msg.transaction.get_transaction_id(),
+            ));
+        }))
     }
 }
 
@@ -145,7 +167,7 @@ impl BroadcastTransactionState {
 }
 
 impl Handler<BroadcastTransactionState> for EntitySender {
-    type Result = ();
+    type Result = ResponseActFuture<Self, ()>;
 
     fn handle(&mut self, msg: BroadcastTransactionState, ctx: &mut Self::Context) -> Self::Result {
         // si nos llamaron aca, la transaccion ya resolvió su estado (o fue abortada o commiteada)
@@ -157,10 +179,26 @@ impl Handler<BroadcastTransactionState> for EntitySender {
         let duration = instant.elapsed();
         self.statistics_handler
             .do_send(UnregisterTransaction::new(msg.transaction_id, duration));
-        self.broadcast_state(msg.transaction_id, msg.transaction_state);
-        self.logger.do_send(LogMessage::new(format!(
-            "[EntitySender] broadcast_state transaction id: {}",
-            msg.transaction_id
-        )));
+
+        let temp_bytes = msg.transaction_id.to_be_bytes();
+        let send_buffer = temp_bytes.as_slice();
+        let state_buffer: u8 = msg.transaction_state.into();
+        let mut to_send = Vec::new();
+        to_send.push(state_buffer);
+        to_send.extend_from_slice(send_buffer);
+        let write_stream = self.stream.clone();
+        let addresses = self.address_map.clone();
+        let fut = async move {
+            for (_, addr) in addresses {
+                write_stream.send_to(to_send.as_slice(), addr).await.unwrap();
+            }
+            msg
+        };
+        Box::pin(fut.into_actor(self).map(|msg, me, ctx| {
+            me.logger.do_send(LogMessage::new(format!(
+                "[EntitySender] broadcast_state transaction id: {}",
+                msg.transaction_id
+            )));
+        }))
     }
 }

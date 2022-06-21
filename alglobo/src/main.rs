@@ -1,5 +1,7 @@
 extern crate core;
+
 pub use alglobo_common_utils;
+
 mod entity_receiver;
 mod entity_sender;
 mod file_reader;
@@ -23,9 +25,10 @@ use actix::Actor;
 use actix_rt::{Arbiter, System};
 use alglobo_common_utils::entity_type::EntityType;
 use std::env::args;
-use std::net::UdpSocket;
+//use std::net::UdpSocket;
 use std::process::exit;
 use std::sync::{mpsc, Arc, Mutex};
+use tokio::net::UdpSocket;
 
 //const EINVAL_ARGS: &str = "Invalid arguments";
 
@@ -53,28 +56,9 @@ fn main() -> Result<(), ()> {
 
     let file_path = argv[1].clone();
 
-    let (sx, tx) = mpsc::channel();
-
     let addr = "localhost:8888".to_string();
-    let write_stream: UdpSocket;
-    let read_stream: UdpSocket;
-    if let Ok(wsock) = UdpSocket::bind(addr) {
-        write_stream = wsock;
-        if let Ok(rsock) = write_stream.try_clone() {
-            read_stream = rsock;
-        } else {
-            logger_addr.do_send(LogMessage::new("ERROR clonando write_stream".to_string()));
-            exit(1);
-        }
-    } else {
-        logger_addr.do_send(LogMessage::new(
-            "ERROR bindeando en address localhost:8888".to_string(),
-        ));
-        exit(1);
-    }
 
     let mut entity_addresses = HashMap::new();
-
     entity_addresses.insert(EntityType::Hotel, "localhost:1234".to_string());
     entity_addresses.insert(EntityType::Bank, "localhost:1235".to_string());
     entity_addresses.insert(EntityType::Airline, "localhost:1236".to_string());
@@ -84,50 +68,33 @@ fn main() -> Result<(), ()> {
     )));
 
     actor_system.block_on(async {
+        let sock = match UdpSocket::bind(&addr).await {
+            Ok(sock) => sock,
+            Err(what) => {
+                logger_addr.do_send(LogMessage::new(format!("ERROR bindeando en {}: {}", addr, what)));
+                exit(1);
+            }
+        };
+
+        let sock = Arc::new(sock);
         let statistics_handler_addr = StatisticsHandler::new().start();
         statistics_handler_addr.do_send(LogPeriodically {});
         let log_c = logger_addr.clone();
         let coordinator_addr = TransactionCoordinator::new(log_c).start();
 
-        let channel_sender = Arc::new(Mutex::new(sx));
-
-        let sender_arbiter = Arbiter::new();
-        let receiver_arbiter = Arbiter::new();
-
-        let local_sender = channel_sender.clone();
-
         let log_c = logger_addr.clone();
-
+        let write_stream = sock.clone();
+        let read_stream = sock.clone();
         let coordinator_c = coordinator_addr.clone();
-        let sender_execution = async move {
-            let sender_addr = EntitySender::new(
-                write_stream,
-                entity_addresses,
-                log_c,
-                coordinator_c,
-                statistics_handler_addr,
-            )
-            .start();
-            let r = local_sender.lock().unwrap().send(sender_addr);
-            if r.is_err() {
-                //logear error (y salir?)
-            }
-        };
 
-        sender_arbiter.spawn(sender_execution);
-        let entity_addr = tx.recv().unwrap();
-
+        let sender_addr = EntitySender::new(write_stream, entity_addresses, log_c, coordinator_c, statistics_handler_addr).start();
+        let log_c = logger_addr.clone();
         let coordinator_c = coordinator_addr.clone();
-        let log_c = logger_addr.clone();
-        let receiver_execution = async move {
-            let addr = EntityReceiver::new(read_stream, log_c, coordinator_c).start();
-            addr.do_send(ReceiveEntityResponse {});
-        };
-
-        receiver_arbiter.spawn(receiver_execution);
+        let receiver_addr = EntityReceiver::new(read_stream, log_c, coordinator_c).start();
+        receiver_addr.do_send(ReceiveEntityResponse{});
 
         let log_c = logger_addr.clone();
-        let transaction_dispatcher = TransactionDispatcher::new(entity_addr, log_c).start();
+        let transaction_dispatcher = TransactionDispatcher::new(sender_addr, log_c).start();
 
         let log_c = logger_addr.clone();
         let file_reader = match FileReader::new(file_path, transaction_dispatcher, log_c) {
@@ -137,7 +104,7 @@ fn main() -> Result<(), ()> {
                 exit(1);
             }
         }
-        .start();
+            .start();
 
         // esta logica no se donde debería ir
         let msg = ServeNextTransaction {};

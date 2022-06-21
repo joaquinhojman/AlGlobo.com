@@ -43,10 +43,11 @@ impl ReceiveTransaction {
     pub fn deserialize(&self, logger: &Addr<Logger>) -> TransactionRequest {
         let header = StringRecord::from(vec![HEADER_ID, HEADER_HOTEL, HEADER_BANK, HEADER_AIRLINE]);
         let raw_transaction = self.transaction.clone();
-        logger.do_send(LogMessage::new(format!(
+        /*logger.do_send(LogMessage::new(format!(
             "deserialize: {:?}",
             raw_transaction
         )));
+         */
         match raw_transaction.deserialize(Some(&header)) {
             Ok(transaction) => transaction,
             Err(e) => {
