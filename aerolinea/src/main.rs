@@ -1,7 +1,7 @@
+use alglobo_common_utils::entity_logger::Logger;
 use alglobo_common_utils::entity_payload::{EntityPayload, PAYLOAD_SIZE};
 use alglobo_common_utils::transaction_response::TransactionResponse;
 use alglobo_common_utils::transaction_state::TransactionState;
-use alglobo_common_utils::entity_logger::Logger;
 use rand::{thread_rng, Rng};
 use std::collections::HashMap;
 use std::net::UdpSocket;
@@ -16,7 +16,6 @@ fn main() {
         let mut buf = [0; PAYLOAD_SIZE];
 
         let (_, addr) = sock.recv_from(&mut buf).unwrap();
-        logger.log(format!("Buf received: {:?}", buf));
 
         let payload_deserialized: EntityPayload = buf.to_vec().into();
         logger.log(format!("payload_deserialized: {:?}", payload_deserialized));
