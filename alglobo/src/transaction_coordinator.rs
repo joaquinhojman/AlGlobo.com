@@ -31,7 +31,7 @@ impl TransactionCoordinator {
             transaction_log: HashMap::new(),
             transaction_update_listening_channels: HashMap::new(),
             entity_states: HashMap::new(),
-            logger: logger,
+            logger,
         }
     }
 }
@@ -72,12 +72,12 @@ impl Handler<TransactionUpdate> for TransactionCoordinator {
             }
         };
         v.push(Some(msg.transaction_response.transaction_state));
-        self.logger
-        .do_send(LogMessage::new(format!("[TransactionUpdate] entity_states: {:?}", v)));
         if v.len() == 3 && (v.iter().all(|opt| opt.is_some())) {
             // unico caso en el que hay que mandar por el canal es cuando estamos esperando
             // ergo, esto solo vale en la fase de Prepare
             if let None | Some(&TransactionState::Wait) = self.transaction_log.get(&msg.transaction_response.transaction_id) {
+                self.logger
+                    .do_send(LogMessage::new(format!("[COORDINATOR] States for transaction {}: {:?}", msg.transaction_response.transaction_id, v)));
                 // si llegue acá mando el estado nuevo de la transaccion
                 // este unwrap es correcto ya que sabemos que el vector tiene 3 options con some
                 let tx = self
@@ -137,6 +137,7 @@ impl Handler<WaitTransactionStateResponse> for TransactionCoordinator {
     ) -> Self::Result {
         // si la contenia, entonces ya registramos esta transaccion
         // con lo cual no hace falta esperar a timeout (asumiendo que no se falla en la fase de commit)
+        let log_clone = self.logger.clone();
         if self.transaction_log.contains_key(&msg.transaction_id) {
             Box::pin(std::future::ready(()).into_actor(self))
         } else {
@@ -178,7 +179,7 @@ impl Handler<WaitTransactionStateResponse> for TransactionCoordinator {
                         }
                     }
                     Err(_) => {
-                        println!("timeout reached");
+                        log_clone.do_send(LogMessage::new(format!("[COORDINATOR] Timeout reached for transaction {}", msg.transaction_id)));
                         msg.sender_addr.do_send(BroadcastTransactionState::new(
                             msg.transaction_id,
                             TransactionState::Abort
@@ -188,6 +189,7 @@ impl Handler<WaitTransactionStateResponse> for TransactionCoordinator {
                 }
             };
             Box::pin(fut.into_actor(self).map(|(id, state), me, _| {
+                me.logger.do_send(LogMessage::new(format!("[COORDINATOR] transaction {} final state: {:?}", id, state.clone())));
                 me.transaction_log.insert(id, state);
             }))
         }
