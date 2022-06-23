@@ -1,25 +1,23 @@
+use crate::transaction_dispatcher::{ReceiveTransaction, TransactionDispatcher};
 use crate::LogMessage;
-use crate::{
-    logger::Logger,
-    transaction_dispatcher::{ReceiveTransaction, TransactionDispatcher},
-};
 use actix::{Actor, Addr, Context, Handler, Message};
 use std::fs::File;
 
+use crate::logger::LoggerActor;
 use actix::dev::MessageResponse;
 use csv::{Reader, StringRecord};
 
 pub struct FileReader {
     transaction_file_handle: Reader<File>,
     transaction_dispatcher: Addr<TransactionDispatcher>,
-    logger: Addr<Logger>,
+    logger: Addr<LoggerActor>,
 }
 
 impl FileReader {
     pub fn new(
         transaction_file_path: String,
         transaction_dispatcher: Addr<TransactionDispatcher>,
-        logger: Addr<Logger>,
+        logger: Addr<LoggerActor>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         logger.do_send(LogMessage::new("Creating FileReader...".to_string()));
         Ok(FileReader {

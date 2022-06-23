@@ -1,9 +1,9 @@
 use crate::entity_sender::{EntitySender, PrepareTransaction};
 use crate::LogMessage;
-use crate::Logger;
 use actix::{Actor, Addr, Context, Handler, Message};
 use alglobo_common_utils::transaction_request::TransactionRequest;
 
+use crate::logger::LoggerActor;
 use csv::StringRecord;
 
 const HEADER_ID: &str = "id";
@@ -13,11 +13,11 @@ const HEADER_AIRLINE: &str = "airline_cost";
 
 pub struct TransactionDispatcher {
     messenger: Addr<EntitySender>,
-    logger: Addr<Logger>,
+    logger: Addr<LoggerActor>,
 }
 
 impl TransactionDispatcher {
-    pub fn new(messenger: Addr<EntitySender>, logger: Addr<Logger>) -> Self {
+    pub fn new(messenger: Addr<EntitySender>, logger: Addr<LoggerActor>) -> Self {
         logger.do_send(LogMessage::new(
             "Creating TransactionDispatcher...".to_string(),
         ));
@@ -40,14 +40,9 @@ impl ReceiveTransaction {
         ReceiveTransaction { transaction }
     }
 
-    pub fn deserialize(&self, logger: &Addr<Logger>) -> TransactionRequest {
+    pub fn deserialize(&self, _: &Addr<LoggerActor>) -> TransactionRequest {
         let header = StringRecord::from(vec![HEADER_ID, HEADER_HOTEL, HEADER_BANK, HEADER_AIRLINE]);
         let raw_transaction = self.transaction.clone();
-        /*logger.do_send(LogMessage::new(format!(
-            "deserialize: {:?}",
-            raw_transaction
-        )));
-         */
         match raw_transaction.deserialize(Some(&header)) {
             Ok(transaction) => transaction,
             Err(e) => {

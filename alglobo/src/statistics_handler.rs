@@ -3,8 +3,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use actix::{
-    Actor, ActorFutureExt, AsyncContext, Context, ContextFutureSpawner, Handler, Message,
-    ResponseActFuture, WrapFuture,
+    Actor, ActorFutureExt, AsyncContext, Context, Handler, Message, ResponseActFuture, WrapFuture,
 };
 
 const LOG_PERIOD_S: u64 = 1;
@@ -47,7 +46,7 @@ impl RegisterTransaction {
 impl Handler<RegisterTransaction> for StatisticsHandler {
     type Result = ();
 
-    fn handle(&mut self, msg: RegisterTransaction, _ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RegisterTransaction, _: &mut Self::Context) -> Self::Result {
         // si ya estaba y la estamos tratando de registrar de nuevo es un bug
         if self
             .transaction_id_timestamp_set
@@ -81,7 +80,7 @@ impl UnregisterTransaction {
 impl Handler<UnregisterTransaction> for StatisticsHandler {
     type Result = ();
 
-    fn handle(&mut self, msg: UnregisterTransaction, _ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: UnregisterTransaction, _: &mut Self::Context) -> Self::Result {
         // si tratamos de desregistrar una transaccion y no existe es un bug
         if self
             .transaction_id_timestamp_set
@@ -106,11 +105,11 @@ pub struct GetMeanDuration {}
 impl Handler<GetMeanDuration> for StatisticsHandler {
     type Result = ResponseActFuture<Self, f64>;
 
-    fn handle(&mut self, _msg: GetMeanDuration, _ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: GetMeanDuration, _: &mut Self::Context) -> Self::Result {
         Box::pin({
-            std::future::ready(()).into_actor(self).map(|_, me, ctx| {
+            std::future::ready(()).into_actor(self).map(|_, me, _| {
                 if me.total_transactions == 0 {
-                    return 0.0;
+                    0.0
                 } else {
                     me.elapsed_time.as_secs() as f64 / me.total_transactions as f64
                 }
@@ -127,7 +126,7 @@ pub struct LogPeriodically {}
 impl Handler<LogPeriodically> for StatisticsHandler {
     type Result = ResponseActFuture<Self, ()>;
 
-    fn handle(&mut self, msg: LogPeriodically, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _: LogPeriodically, _: &mut Self::Context) -> Self::Result {
         Box::pin(
             actix_rt::time::sleep(Duration::from_secs(LOG_PERIOD_S))
                 .into_actor(self)

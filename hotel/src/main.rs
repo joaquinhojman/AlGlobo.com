@@ -64,11 +64,12 @@ fn main() {
                         logger.log("TransactionResponse: Commit".to_string());
                         TransactionResponse::new(transaction_id, TransactionState::Commit)
                     }
-                    Some(TransactionState::Abort) | None | _ => {
+                    Some(TransactionState::Abort) | None => {
                         // fallar
                         logger.log("PANICK; TransactionState::Abort cannot be handled by two fase transactionality algorithm".to_string());
                         panic!("This cannot be handled by two fase transactionality algorithm!");
                     }
+                    _ => panic!("This cannot be handled by two fase transactionality algorithm!"),
                 }
             }
             TransactionState::Abort => {
@@ -84,11 +85,12 @@ fn main() {
                         logger.log("TransactionResponse: Abort".to_string());
                         TransactionResponse::new(transaction_id, TransactionState::Abort)
                     }
-                    Some(TransactionState::Commit) | None | _ => {
+                    Some(TransactionState::Commit) | None => {
                         println!("{} {:?}", transaction_id, log.get(&transaction_id));
                         logger.log("PANICK; TransactionState::Commit cannot be handled by two fase transactionality algorithm".to_string());
                         panic!("This cannot be handled by two fase transactionality algorithm!");
                     }
+                    _ => panic!("This cannot be handled by two fase transactionality algorithm!"),
                 }
             }
             _ => panic!("wtf"),

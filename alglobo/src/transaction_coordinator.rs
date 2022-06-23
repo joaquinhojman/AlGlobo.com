@@ -1,7 +1,7 @@
 use crate::entity_sender::BroadcastTransactionState;
+use crate::logger::LoggerActor;
 use crate::EntitySender;
 use crate::LogMessage;
-use crate::Logger;
 use actix::{
     Actor, ActorFutureExt, Addr, Context, Handler, Message, ResponseActFuture, WrapFuture,
 };
@@ -19,11 +19,11 @@ pub struct TransactionCoordinator {
     transaction_log: HashMap<u64, TransactionState>,
     transaction_update_listening_channels: HashMap<u64, Sender<Vec<Option<TransactionState>>>>,
     entity_states: HashMap<u64, Vec<Option<TransactionState>>>,
-    logger: Addr<Logger>,
+    logger: Addr<LoggerActor>,
 }
 
 impl TransactionCoordinator {
-    pub fn new(logger: Addr<Logger>) -> Self {
+    pub fn new(logger: Addr<LoggerActor>) -> Self {
         logger.do_send(LogMessage::new(
             "Creating TransactionCoordinator...".to_string(),
         ));
@@ -75,9 +75,14 @@ impl Handler<TransactionUpdate> for TransactionCoordinator {
         if v.len() == 3 && (v.iter().all(|opt| opt.is_some())) {
             // unico caso en el que hay que mandar por el canal es cuando estamos esperando
             // ergo, esto solo vale en la fase de Prepare
-            if let None | Some(&TransactionState::Wait) = self.transaction_log.get(&msg.transaction_response.transaction_id) {
-                self.logger
-                    .do_send(LogMessage::new(format!("[COORDINATOR] States for transaction {}: {:?}", msg.transaction_response.transaction_id, v)));
+            if let None | Some(&TransactionState::Wait) = self
+                .transaction_log
+                .get(&msg.transaction_response.transaction_id)
+            {
+                self.logger.do_send(LogMessage::new(format!(
+                    "[COORDINATOR] States for transaction {}: {:?}",
+                    msg.transaction_response.transaction_id, v
+                )));
                 // si llegue acá mando el estado nuevo de la transaccion
                 // este unwrap es correcto ya que sabemos que el vector tiene 3 options con some
                 let tx = self
@@ -86,7 +91,7 @@ impl Handler<TransactionUpdate> for TransactionCoordinator {
                 let v = self
                     .entity_states
                     .remove(&msg.transaction_response.transaction_id);
-                if let (Some(vec), Some(tx)) = (v, tx)  {
+                if let (Some(vec), Some(tx)) = (v, tx) {
                     // si fallo se droppeo el receiver, con lo cual se llego al timeout, y por ende se aborto la transaccion
                     let _ = tx.send(vec);
                 }
@@ -138,12 +143,11 @@ impl Handler<WaitTransactionStateResponse> for TransactionCoordinator {
         // si la contenia, entonces ya registramos esta transaccion
         // con lo cual no hace falta esperar a timeout (asumiendo que no se falla en la fase de commit)
         let log_clone = self.logger.clone();
-        if self.transaction_log.contains_key(&msg.transaction_id) {
-            Box::pin(std::future::ready(()).into_actor(self))
-        } else {
+        if let std::collections::hash_map::Entry::Vacant(e) =
+            self.transaction_log.entry(msg.transaction_id)
+        {
             let (tx, rx) = oneshot::channel();
-            self.transaction_log
-                .insert(msg.transaction_id, msg.transaction_state);
+            e.insert(msg.transaction_state);
             self.transaction_update_listening_channels
                 .insert(msg.transaction_id, tx);
             let fut = async move {
@@ -151,47 +155,54 @@ impl Handler<WaitTransactionStateResponse> for TransactionCoordinator {
                     Ok(x) => {
                         if let Ok(mut v) = x {
                             let all_states_match = v.iter().all(|opt| {
-                                // no es bonito pero funciona
                                 std::mem::discriminant(&msg.expected_transaction_state)
-                                    == std::mem::discriminant(&opt.as_ref().unwrap())
+                                    == std::mem::discriminant(opt.as_ref().unwrap())
                             });
                             if all_states_match {
                                 let state = v.remove(0).unwrap();
-                                // self.transaction_log.insert(msg.transaction_id, state);
                                 msg.sender_addr.do_send(BroadcastTransactionState::new(
                                     msg.transaction_id,
-                                    state
+                                    state,
                                 ));
                                 (msg.transaction_id, state)
                             } else {
                                 msg.sender_addr.do_send(BroadcastTransactionState::new(
                                     msg.transaction_id,
-                                    TransactionState::Abort
+                                    TransactionState::Abort,
                                 ));
                                 (msg.transaction_id, TransactionState::Abort)
                             }
                         } else {
                             msg.sender_addr.do_send(BroadcastTransactionState::new(
                                 msg.transaction_id,
-                                TransactionState::Abort
+                                TransactionState::Abort,
                             ));
                             (msg.transaction_id, TransactionState::Abort)
                         }
                     }
                     Err(_) => {
-                        log_clone.do_send(LogMessage::new(format!("[COORDINATOR] Timeout reached for transaction {}", msg.transaction_id)));
+                        log_clone.do_send(LogMessage::new(format!(
+                            "[COORDINATOR] Timeout reached for transaction {}",
+                            msg.transaction_id
+                        )));
                         msg.sender_addr.do_send(BroadcastTransactionState::new(
                             msg.transaction_id,
-                            TransactionState::Abort
+                            TransactionState::Abort,
                         ));
                         (msg.transaction_id, TransactionState::Abort)
                     }
                 }
             };
             Box::pin(fut.into_actor(self).map(|(id, state), me, _| {
-                me.logger.do_send(LogMessage::new(format!("[COORDINATOR] transaction {} final state: {:?}", id, state.clone())));
+                me.logger.do_send(LogMessage::new(format!(
+                    "[COORDINATOR] transaction {} final state: {:?}",
+                    id,
+                    state.clone()
+                )));
                 me.transaction_log.insert(id, state);
             }))
+        } else {
+            Box::pin(std::future::ready(()).into_actor(self))
         }
     }
 }

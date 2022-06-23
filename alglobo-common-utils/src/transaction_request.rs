@@ -1,7 +1,6 @@
 use crate::entity_payload::EntityPayload;
 use crate::entity_type::EntityType;
 use serde::Deserialize;
-use crate::transaction_state::TransactionState;
 
 #[derive(Deserialize)]
 pub struct TransactionRequest {

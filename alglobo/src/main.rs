@@ -10,8 +10,7 @@ mod statistics_handler;
 mod transaction_coordinator;
 mod transaction_dispatcher;
 
-use crate::logger::LogMessage;
-use crate::logger::Logger;
+use crate::logger::{LogMessage, LoggerActor};
 use file_reader::FileReader;
 use std::collections::HashMap;
 use transaction_dispatcher::TransactionDispatcher;
@@ -25,12 +24,9 @@ use actix::Actor;
 use actix_rt::{Arbiter, System};
 use alglobo_common_utils::entity_type::EntityType;
 use std::env::args;
-//use std::net::UdpSocket;
 use std::process::exit;
 use std::sync::{mpsc, Arc, Mutex};
 use tokio::net::UdpSocket;
-
-//const EINVAL_ARGS: &str = "Invalid arguments";
 
 fn main() -> Result<(), ()> {
     let actor_system = System::new();
@@ -40,7 +36,7 @@ fn main() -> Result<(), ()> {
     let logger_sender = Arc::new(Mutex::new(sx_l));
     let logger_arbiter = Arbiter::new();
     let logger_execution = async move {
-        let logger_addr = Logger::new("logf.log").start();
+        let logger_addr = LoggerActor::new("logf.log").start();
         let _r = logger_sender.lock().unwrap().send(logger_addr);
     };
     logger_arbiter.spawn(logger_execution);
@@ -71,7 +67,10 @@ fn main() -> Result<(), ()> {
         let sock = match UdpSocket::bind(&addr).await {
             Ok(sock) => sock,
             Err(what) => {
-                logger_addr.do_send(LogMessage::new(format!("ERROR bindeando en {}: {}", addr, what)));
+                logger_addr.do_send(LogMessage::new(format!(
+                    "ERROR bindeando en {}: {}",
+                    addr, what
+                )));
                 exit(1);
             }
         };
@@ -87,11 +86,18 @@ fn main() -> Result<(), ()> {
         let read_stream = sock.clone();
         let coordinator_c = coordinator_addr.clone();
 
-        let sender_addr = EntitySender::new(write_stream, entity_addresses, log_c, coordinator_c, statistics_handler_addr).start();
+        let sender_addr = EntitySender::new(
+            write_stream,
+            entity_addresses,
+            log_c,
+            coordinator_c,
+            statistics_handler_addr,
+        )
+        .start();
         let log_c = logger_addr.clone();
         let coordinator_c = coordinator_addr.clone();
         let receiver_addr = EntityReceiver::new(read_stream, log_c, coordinator_c).start();
-        receiver_addr.do_send(ReceiveEntityResponse{});
+        receiver_addr.do_send(ReceiveEntityResponse {});
 
         let log_c = logger_addr.clone();
         let transaction_dispatcher = TransactionDispatcher::new(sender_addr, log_c).start();
@@ -104,7 +110,7 @@ fn main() -> Result<(), ()> {
                 exit(1);
             }
         }
-            .start();
+        .start();
 
         // esta logica no se donde debería ir
         let msg = ServeNextTransaction {};
