@@ -129,3 +129,33 @@ impl Logger {
         let _r = writeln!(self.file, "{} LOG: {:?}", tm, msg);
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use std::io::BufRead;
+    use std::io::{BufReader, self};
+    use crate::entity_logger::File;
+    use std::fs;
+    use crate::entity_logger::Logger;
+
+
+    #[test]
+    fn test_logger(){
+        let filename = "test.log";
+        let mut logger = Logger::new(filename);
+        logger.log("TEST".to_string());
+
+        let file = File::open(filename).unwrap();
+        let lines = io::BufReader::new(file).lines();
+        for line in lines{
+            let l = line.unwrap();
+            
+        }
+    
+        
+        assert_eq!(true, true);
+        let _ = fs::remove_file(filename);
+    }
+
+}
