@@ -32,3 +32,18 @@ impl From<TransactionState> for u8 {
         }
     }
 }
+
+mod tests {
+    use crate::transaction_state::TransactionState;
+
+    #[test]
+    fn test_transaction_state() {
+        let mut s: TransactionState;
+        s = TransactionState::from(0);
+        assert_eq!(format!("{:?}", s), "Prepare");
+        s = TransactionState::from(1);
+        assert_eq!(format!("{:?}", s), "Commit");
+        s = TransactionState::from(2);
+        assert_eq!(format!("{:?}", s), "Abort");
+    }
+}
