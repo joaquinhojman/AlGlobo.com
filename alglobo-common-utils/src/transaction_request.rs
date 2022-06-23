@@ -7,7 +7,7 @@ pub struct TransactionRequest {
     id: u64,
     hotel_cost: u64,
     bank_cost: u64,
-    airline_cost: u64
+    airline_cost: u64,
 }
 
 // TODO: refactor

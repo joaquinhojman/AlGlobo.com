@@ -8,7 +8,7 @@ pub enum TransactionState {
     Prepare,
     Accept, // idem wait
     Commit,
-    Abort
+    Abort,
 }
 
 impl From<u8> for TransactionState {
@@ -17,7 +17,7 @@ impl From<u8> for TransactionState {
             PREPARE => TransactionState::Prepare,
             COMMIT => TransactionState::Commit,
             ABORT => TransactionState::Abort,
-            _ => panic!("Could not deserialize unknown byte into state")
+            _ => panic!("Could not deserialize unknown byte into state"),
         }
     }
 }
@@ -28,7 +28,7 @@ impl From<TransactionState> for u8 {
             TransactionState::Prepare => PREPARE,
             TransactionState::Commit => COMMIT,
             TransactionState::Abort => ABORT,
-            _ => panic!("State is not serializable")
+            _ => panic!("State is not serializable"),
         }
     }
 }
