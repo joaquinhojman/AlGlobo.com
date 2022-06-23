@@ -129,3 +129,43 @@ impl Logger {
         let _r = writeln!(self.file, "{} LOG: {:?}", tm, msg);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::entity_logger::File;
+    use crate::entity_logger::Logger;
+    use std::io;
+    use std::io::BufRead;
+    use std::time::SystemTime;
+
+    use super::seconds_to_datetime;
+    use super::DateTime;
+
+    #[test]
+    fn test_logger() {
+        let filename = "test.log";
+        let mut logger = Logger::new(filename);
+        logger.log("TEST".to_string());
+
+        let file = File::open(filename).unwrap();
+        let lines = io::BufReader::new(file).lines();
+        for line in lines {
+            let l = line.unwrap();
+            let slice = &l[26..30];
+            assert_eq!(slice, "TEST");
+            break;
+        }
+    }
+
+    #[test]
+    fn test_datetime() {
+        let mut tm = DateTime::new();
+        if let Ok(n) = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+            let n_secs = n.as_secs() as i64;
+            seconds_to_datetime(n_secs, &mut tm);
+        }
+        let datetime = format!("{}", tm);
+        assert_eq!("2022", &datetime[0..4]);
+        assert_eq!("06", &datetime[5..7]);
+    }
+}

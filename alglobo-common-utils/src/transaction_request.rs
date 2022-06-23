@@ -39,3 +39,44 @@ impl TransactionRequest {
         self.id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::TransactionRequest;
+
+    #[test]
+    fn test_get_entities_data() {
+        let t_hotel = TransactionRequest {
+            id: 0,
+            hotel_cost: 10,
+            bank_cost: 0,
+            airline_cost: 0,
+        };
+        let data = &t_hotel.get_entities_data()[0];
+        assert_eq!(format!("{:?}", data.0), "Hotel");
+        assert_eq!(data.1.cost, 10);
+        assert_eq!(data.1.transaction_id, 0);
+
+        let t_banco = TransactionRequest {
+            id: 1,
+            hotel_cost: 0,
+            bank_cost: 10,
+            airline_cost: 0,
+        };
+        let data = &t_banco.get_entities_data()[0];
+        assert_eq!(format!("{:?}", data.0), "Bank");
+        assert_eq!(data.1.cost, 10);
+        assert_eq!(data.1.transaction_id, 1);
+
+        let t_airline = TransactionRequest {
+            id: 2,
+            hotel_cost: 0,
+            bank_cost: 0,
+            airline_cost: 10,
+        };
+        let data = &t_airline.get_entities_data()[0];
+        assert_eq!(format!("{:?}", data.0), "Airline");
+        assert_eq!(data.1.cost, 10);
+        assert_eq!(data.1.transaction_id, 2);
+    }
+}
