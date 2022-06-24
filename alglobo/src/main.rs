@@ -130,6 +130,11 @@ fn main() -> Result<(), ()> {
                 }
             }
         }
+        actix_rt::signal::ctrl_c()
+            .await
+            .expect("Could not catch signal");
+        // don't sacar
+        System::current().stop();
     });
 
     match actor_system.run() {
