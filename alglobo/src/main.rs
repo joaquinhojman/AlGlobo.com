@@ -12,12 +12,14 @@ mod transaction_dispatcher;
 
 use crate::logger::{LogMessage, LoggerActor};
 use file_reader::FileReader;
+use file_writer::FileWriter;
 use std::collections::HashMap;
 use transaction_dispatcher::TransactionDispatcher;
 
 use crate::entity_receiver::{EntityReceiver, ReceiveEntityResponse};
 use crate::entity_sender::EntitySender;
 use crate::file_reader::{ReadStatus, ServeNextTransaction};
+use crate::file_writer::{FileWriter};
 use crate::statistics_handler::{LogPeriodically, StatisticsHandler};
 use crate::transaction_coordinator::TransactionCoordinator;
 use actix::Actor;
@@ -103,7 +105,17 @@ fn main() -> Result<(), ()> {
         let transaction_dispatcher = TransactionDispatcher::new(sender_addr, log_c).start();
 
         let log_c = logger_addr.clone();
-        let file_reader = match FileReader::new(file_path, transaction_dispatcher, log_c) {
+        let file_writer = match FileWriter::new("failed_transactions.csv", log_c) {
+            Ok(file_writer) => file_writer,
+            Err(e) => {
+                logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
+                exit(1);
+            }
+        }
+        .start();
+
+        let log_c = logger_addr.clone();
+        let file_reader = match FileReader::new(file_path, transaction_dispatcher, file_writer, log_c) {
             Ok(file_reader) => file_reader,
             Err(e) => {
                 logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
