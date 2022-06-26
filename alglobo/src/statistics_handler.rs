@@ -2,9 +2,8 @@ use std::collections::HashSet;
 
 use std::time::Duration;
 
-use actix::{
-    Actor, ActorFutureExt, AsyncContext, Context, Handler, Message, ResponseActFuture, WrapFuture,
-};
+use actix::{Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, ResponseActFuture, Running, WrapFuture};
+use actix_rt::ArbiterHandle;
 
 const LOG_PERIOD_S: u64 = 1;
 
@@ -29,6 +28,11 @@ impl StatisticsHandler {
 
 impl Actor for StatisticsHandler {
     type Context = Context<Self>;
+
+    // log periodically from the moment it starts
+    fn started(&mut self, ctx: &mut Self::Context) {
+        ctx.address().do_send(LogPeriodically {})
+    }
 }
 
 #[derive(Message)]

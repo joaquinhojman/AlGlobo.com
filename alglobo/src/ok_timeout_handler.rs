@@ -1,21 +1,25 @@
 use std::time::Duration;
 use actix::{Actor, ActorFutureExt, Addr, Context, Handler, Message, ResponseActFuture, WrapFuture};
+use alglobo_common_utils::entity_logger::Logger;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use crate::beater_responder::BroadcastCoordinator;
-use crate::{BeaterResponder, got_to_the_objective};
+use crate::{BeaterResponder, LoggerActor};
+use crate::bootstrapper::{Bootstrapper, RunAlGlobo};
 
 
 pub struct OkTimeoutHandler {
     sender: Option<oneshot::Sender<u8>>,
     receiver: Option<oneshot::Receiver<u8>>,
     pid: u8,
+    bootstrapper: Addr<Bootstrapper>,
+    logger: Addr<LoggerActor>
 }
 
 impl OkTimeoutHandler {
-    pub fn new(pid: u8) -> Self {
+    pub fn new(pid: u8, bootstrapper: Addr<Bootstrapper>, logger: Addr<LoggerActor>) -> Self {
         let (tx, rx) = oneshot::channel();
-        OkTimeoutHandler { sender: Some(tx), receiver: Some(rx), pid }
+        OkTimeoutHandler { sender: Some(tx), receiver: Some(rx), pid, bootstrapper, logger }
     }
 }
 
@@ -36,7 +40,6 @@ impl WaitTimeout {
     }
 }
 
-// lo llama el finder (antes de enviar los msjs!!!)
 impl Handler<WaitTimeout> for OkTimeoutHandler {
     type Result = ResponseActFuture<Self, ()>;
 
@@ -49,6 +52,8 @@ impl Handler<WaitTimeout> for OkTimeoutHandler {
 
         let rx = self.receiver.take().unwrap();
         let pid = self.pid;
+        let bootstrapper = self.bootstrapper.clone();
+        let logger = self.logger.clone();
 
         let fut = async move {
             match timeout(Duration::from_secs(10), rx).await {
@@ -61,15 +66,12 @@ impl Handler<WaitTimeout> for OkTimeoutHandler {
                 Err(_) => {
                     println!("[PID {}] timeout, mandando coordinator", pid);
                     msg.responder.do_send(BroadcastCoordinator::new(msg.all_pids));
-                    // codigo principal
-                    got_to_the_objective(pid);
+                    bootstrapper.do_send(RunAlGlobo::new(logger));
                     Err(())
                 }
             }
         };
-        Box::pin(fut.into_actor(self).map(|_, _, ctx|{
-
-        }))
+        Box::pin(fut.into_actor(self).map(|_, _, ctx| {}))
     }
 }
 
