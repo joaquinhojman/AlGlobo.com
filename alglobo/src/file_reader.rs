@@ -87,9 +87,9 @@ impl Handler<FindTransaction> for FileReader {
                 self.logger.do_send(LogMessage::new(
                     "FileReader: found specific transaction".to_string(),
                 ));
-                let field = vec![];
+                let mut field = vec![];
                 let v = transaction.get_entities_data();
-                for (entity, data) in v {
+                for (_entity, data) in v {
                     field.push(data);
                 }
                 let failed = FailedTransaction {
@@ -100,6 +100,7 @@ impl Handler<FindTransaction> for FileReader {
                 };
                 self.failed_transaction_logger.do_send(failed);
             }
+            record = StringRecord::new();
         }
         self.logger.do_send(LogMessage::new(
             "FileReader: couldnt find specific transaction".to_string(),
