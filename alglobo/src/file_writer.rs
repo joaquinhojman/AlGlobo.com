@@ -1,10 +1,14 @@
 use crate::LogMessage;
-use actix::{Actor, Addr, Context, Handler, Message};
+use actix::{Actor, Addr, Context, Handler, Message, Running};
 use std::fs::File;
-use serde::Serialize;
 
 use crate::logger::LoggerActor;
-use csv::{Writer};
+use csv::{StringRecord, Writer};
+
+const HEADER_ID: &str = "id";
+const HEADER_HOTEL: &str = "hotel_cost";
+const HEADER_BANK: &str = "bank_cost";
+const HEADER_AIRLINE: &str = "airline_cost";
 
 pub struct FileWriter {
     transaction_file: Writer<File>,
@@ -26,49 +30,34 @@ impl FileWriter {
 
 impl Actor for FileWriter {
     type Context = Context<Self>;
+
+    fn started(&mut self, _: &mut Self::Context) {
+        println!("WRITING TO FILE");
+        self.transaction_file
+            .write_record(&[HEADER_ID, HEADER_HOTEL, HEADER_BANK, HEADER_AIRLINE])
+            .expect("could not write record to file");
+        self.transaction_file.flush().expect("could not flush");
+    }
 }
 
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct FailedTransaction {
-    pub id: u64,
-    pub hotel_cost: u64,
-    pub bank_cost: u64,
-    pub airline_cost: u64,
+    raw_transaction: StringRecord,
 }
+
 impl FailedTransaction {
-    pub fn get_transaction(&self) -> [u64; 4] {
-        [self.id, self.hotel_cost, self.bank_cost, self.airline_cost]
+    pub fn new(raw_transaction: StringRecord) -> Self {
+        FailedTransaction { raw_transaction }
     }
 }
 
-#[derive(Serialize)]
-struct Row {
-    id: u64,
-    hotel_cost: u64,
-    bank_cost: u64,
-    airline_cost: u64,
-}
-
-
 impl Handler<FailedTransaction> for FileWriter {
     type Result = ();
+
     fn handle(&mut self, msg: FailedTransaction, _ctx: &mut Self::Context) -> Self::Result {
-        let field = msg.get_transaction();
-        // self.transaction_file.serialize(Row {
-        //     id: field[0],
-        //     hotel_cost: field[1],
-        //     bank_cost: field[2],
-        //     airline_cost: field[3],
-        // }).unwrap();
-        let mut test = [
-            field[0].to_string(),
-            field[1].to_string(),
-            field[2].to_string(),
-            field[3].to_string()
-        ];
-// este fue mi ultimo intento, ni idea porque no se escribio
-        self.transaction_file.write_record(&mut test);
-        self.logger.do_send(LogMessage::new("Saved failed transaction".to_string()));
+        if let Err(what) = self.transaction_file.write_record(msg.raw_transaction.as_byte_record()) {
+            self.logger.do_send(LogMessage::new(format!("Saved failed transaction, with error message: {}", what)));
+        }
     }
 }

@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use transaction_dispatcher::TransactionDispatcher;
 
 use crate::entity_receiver::{EntityReceiver, ReceiveEntityResponse};
-use crate::entity_sender::EntitySender;
+use crate::entity_sender::{EntitySender, RegisterFileReader};
 use crate::file_reader::{ReadStatus, ServeNextTransaction};
 use crate::statistics_handler::{LogPeriodically, StatisticsHandler};
 use crate::transaction_coordinator::TransactionCoordinator;
@@ -102,6 +102,7 @@ fn main() -> Result<(), ()> {
         receiver_addr.do_send(ReceiveEntityResponse {});
 
         let log_c = logger_addr.clone();
+        let sender_clone = sender_addr.clone();
         let transaction_dispatcher = TransactionDispatcher::new(sender_addr, log_c).start();
 
         let log_c = logger_addr.clone();
@@ -123,6 +124,9 @@ fn main() -> Result<(), ()> {
             }
         }
         .start();
+        let file_reader_clone = file_reader.clone();
+        sender_clone.do_send(RegisterFileReader::new(file_reader_clone));
+
 
         // esta logica no se donde debería ir
         let msg = ServeNextTransaction {};
