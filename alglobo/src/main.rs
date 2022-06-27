@@ -5,6 +5,7 @@ pub use alglobo_common_utils;
 mod entity_receiver;
 mod entity_sender;
 mod file_reader;
+mod file_writer;
 mod logger;
 mod statistics_handler;
 mod transaction_coordinator;
@@ -19,7 +20,6 @@ use transaction_dispatcher::TransactionDispatcher;
 use crate::entity_receiver::{EntityReceiver, ReceiveEntityResponse};
 use crate::entity_sender::EntitySender;
 use crate::file_reader::{ReadStatus, ServeNextTransaction};
-use crate::file_writer::{FileWriter};
 use crate::statistics_handler::{LogPeriodically, StatisticsHandler};
 use crate::transaction_coordinator::TransactionCoordinator;
 use actix::Actor;
@@ -105,7 +105,7 @@ fn main() -> Result<(), ()> {
         let transaction_dispatcher = TransactionDispatcher::new(sender_addr, log_c).start();
 
         let log_c = logger_addr.clone();
-        let file_writer = match FileWriter::new("failed_transactions.csv", log_c) {
+        let file_writer = match FileWriter::new("failed_transactions.csv".to_string(), log_c) {
             Ok(file_writer) => file_writer,
             Err(e) => {
                 logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
