@@ -13,10 +13,10 @@ mod transaction_coordinator;
 mod transaction_dispatcher;
 mod ok_timeout_handler;
 mod bootstrapper;
+mod file_writer;
 
 use crate::logger::{LogMessage, LoggerActor};
 use file_reader::FileReader;
-use std::collections::HashMap;
 use transaction_dispatcher::TransactionDispatcher;
 
 use crate::entity_receiver::{EntityReceiver, ReceiveEntityResponse};
@@ -24,11 +24,10 @@ use crate::entity_sender::EntitySender;
 use crate::file_reader::{ReadStatus, ServeNextTransaction};
 use crate::statistics_handler::{LogPeriodically, StatisticsHandler};
 use crate::transaction_coordinator::TransactionCoordinator;
-use actix::{Actor, ActorStreamExt};
+use actix::Actor;
 use actix_rt::{Arbiter, System};
 
 use std::env::args;
-use std::process::exit;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
@@ -47,19 +46,10 @@ fn id_to_dataaddr(id: usize) -> String {
     "localhost:1235".to_owned() + &*id.to_string()
 }
 
-async fn objective(file_path: String) {
-
-}
-
 const PROCESSES: u8 = 4;
 
 fn main() -> Result<(), ()> {
     let actor_system = System::new();
-    let argv = args().collect::<Vec<String>>();
-    if argv.len() != 3 {
-        // logger_addr.do_send(LogMessage::new("ERROR: Parametros incorrectos".to_string()));
-        exit(1);
-    }
 
     //Inicializacion del Actor Logger
     let (sx_l, tx_l) = mpsc::channel();
@@ -74,8 +64,13 @@ fn main() -> Result<(), ()> {
 
     logger_addr.do_send(LogMessage::new("Logger inicializado".to_string()));
 
+    let argv = args().collect::<Vec<String>>();
+    if argv.len() != 3 {
+        logger_addr.do_send(LogMessage::new("ERROR: Parametros incorrectos".to_string()));
+        panic!("ERROR: Parametros incorrectos");
+    }
 
-    let pid = u8::from_str_radix(argv[2].as_str(), 10).unwrap();
+    let pid = u8::from_str_radix(argv[1].as_str(), 10).unwrap();
     let all_pids = (0..PROCESSES).collect::<Vec<u8>>();
     let filtered_pids = all_pids.clone().into_iter().filter(|&other_pid| other_pid > pid).collect();
 
@@ -95,8 +90,8 @@ fn main() -> Result<(), ()> {
         let data_clone = data_socket.clone();
         let coordinator_clone = coordinator_socket.clone();
 
-        let bootstrapper = Bootstrapper::new("transactions.csv".to_string()).start();
-        let timeout_handler = OkTimeoutHandler::new(pid, bootstrapper, logger_addr).start();
+        let bootstrapper = Bootstrapper::new(argv[2].to_string()).start();
+        let timeout_handler = OkTimeoutHandler::new(pid, bootstrapper, logger_addr.clone()).start();
         let timeout_handler_clone = timeout_handler.clone();
 
         let pinger_finder_addr = PingerFinder::new(Some(pid), pid, all_pids, filtered_pids, data_socket, coordinator_socket, timeout_handler).start();
@@ -113,7 +108,7 @@ fn main() -> Result<(), ()> {
     match actor_system.run() {
         Ok(_) => {}
         Err(e) => {
-            // logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
+            logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
             return Err(());
         }
     }

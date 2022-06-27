@@ -1,10 +1,11 @@
 use std::collections::HashMap;
-use std::process::exit;
 use std::sync::Arc;
 use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, SyncContext, WrapFuture};
 use alglobo_common_utils::entity_type::EntityType;
 use tokio::net::UdpSocket;
 use crate::{EntityReceiver, EntitySender, FileReader, LoggerActor, LogMessage, LogPeriodically, ReadStatus, ReceiveEntityResponse, ServeNextTransaction, StatisticsHandler, TransactionCoordinator, TransactionDispatcher};
+use crate::entity_sender::RegisterFileReader;
+use crate::file_writer::FileWriter;
 
 pub struct Bootstrapper {
     file_path: String
@@ -33,7 +34,7 @@ impl Bootstrapper {
                     "ERROR bindeando en {}: {}",
                     addr, what
                 )));
-                exit(1);
+                panic!("ERROR bindeando en {}: {}", addr, what);
             }
         };
 
@@ -67,17 +68,30 @@ impl Bootstrapper {
         receiver_addr.do_send(ReceiveEntityResponse {});
 
         let log_c = logger_addr.clone();
+        let sender_clone = sender_addr.clone();
         let transaction_dispatcher = TransactionDispatcher::new(sender_addr, log_c).start();
 
         let log_c = logger_addr.clone();
-        let file_reader = match FileReader::new(file_path, transaction_dispatcher, log_c) {
+        let file_writer = match FileWriter::new("failed_transactions.csv".to_string(), log_c) {
+            Ok(file_writer) => file_writer,
+            Err(e) => {
+                logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
+                panic!("ERROR: {}", e)
+            }
+
+        }.start();
+
+        let log_c = logger_addr.clone();
+        let file_reader = match FileReader::new(file_path, transaction_dispatcher, file_writer, log_c) {
             Ok(file_reader) => file_reader,
             Err(e) => {
                 logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                exit(1);
+                panic!("ERROR: {}", e)
             }
         }
-            .start();
+        .start();
+        sender_clone.do_send(RegisterFileReader::new(file_reader.clone()));
+
 
         // esta logica no se donde debería ir
         let msg = ServeNextTransaction {};
@@ -93,7 +107,7 @@ impl Bootstrapper {
                 }
                 ReadStatus::ParseError(e) => {
                     logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                    exit(1);
+                    panic!("ERROR: {}", e)
                 }
             }
         }
@@ -120,6 +134,7 @@ impl Handler<RunAlGlobo> for Bootstrapper {
 
     fn handle(&mut self, msg: RunAlGlobo, ctx: &mut Self::Context) -> Self::Result {
         println!("[BOOTSTRAPPER] spawning alglobo schedule");
-        ctx.spawn(Bootstrapper::run(msg.logger_addr, "transactions.csv".to_string()).into_actor(self));
+        let path = self.file_path.clone();
+        ctx.spawn(Bootstrapper::run(msg.logger_addr, path).into_actor(self));
     }
 }
