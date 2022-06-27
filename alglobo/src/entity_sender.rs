@@ -1,6 +1,6 @@
 use crate::statistics_handler::{RegisterTransaction, StatisticsHandler, UnregisterTransaction};
 use crate::transaction_coordinator::{TransactionCoordinator, WaitTransactionStateResponse};
-use crate::LogMessage;
+use crate::{FileReader, LogMessage};
 use actix::{Actor, ActorFutureExt, Context, Handler, Message, ResponseActFuture, WrapFuture};
 use actix::{Addr, AsyncContext};
 use alglobo_common_utils::entity_type::EntityType;
@@ -12,6 +12,7 @@ use crate::logger::LoggerActor;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::net::UdpSocket;
+use crate::file_reader::FindTransaction;
 
 pub struct EntitySender {
     stream: Arc<UdpSocket>,
@@ -20,6 +21,7 @@ pub struct EntitySender {
     coordinator_addr: Addr<TransactionCoordinator>,
     statistics_handler: Addr<StatisticsHandler>,
     transaction_timestamps: HashMap<u64, Instant>,
+    file_reader: Option<Addr<FileReader>>
 }
 
 impl EntitySender {
@@ -38,6 +40,7 @@ impl EntitySender {
             coordinator_addr,
             statistics_handler,
             transaction_timestamps: HashMap::new(),
+            file_reader: None
         }
     }
 }
@@ -155,6 +158,34 @@ impl Handler<BroadcastTransactionState> for EntitySender {
                 "[EntitySender] broadcast_state transaction id: {}",
                 msg.transaction_id
             )));
+            match msg.transaction_state {
+                TransactionState::Abort => {
+                    if let Some(reader) = &me.file_reader {
+                        reader.do_send(FindTransaction::new(msg.transaction_id));
+                    }
+                },
+                _ => {}
+            }
         }))
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct RegisterFileReader {
+    file_reader_addr: Addr<FileReader>
+}
+
+impl RegisterFileReader {
+    pub fn new(file_reader_addr: Addr<FileReader>) -> Self {
+        RegisterFileReader { file_reader_addr }
+    }
+}
+
+impl Handler<RegisterFileReader> for EntitySender {
+    type Result = ();
+
+    fn handle(&mut self, msg: RegisterFileReader, _: &mut Self::Context) -> Self::Result {
+        self.file_reader = Some(msg.file_reader_addr);
     }
 }
