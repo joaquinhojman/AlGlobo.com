@@ -1,11 +1,14 @@
-use actix::{Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, MessageResponse, ResponseActFuture, WrapFuture};
-use std::sync::Arc;
-use futures::future::join_all;
-use tokio::net::UdpSocket;
-use crate::beater_responder::ResponderState::{FindNew, Continue, StartPing};
-use crate::{id_to_ctrladdr, id_to_dataaddr, Ping};
+use crate::beater_responder::ResponderState::{Continue, FindNew, StartPing};
 use crate::ok_timeout_handler::{OkTimeoutHandler, RegisterOkReceived};
 use crate::pinger_finder::{Find, PingerFinder, SetNewLeader};
+use crate::{id_to_ctrladdr, id_to_dataaddr, Ping};
+use actix::{
+    Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, MessageResponse,
+    ResponseActFuture, WrapFuture,
+};
+use futures::future::join_all;
+use std::sync::Arc;
+use tokio::net::UdpSocket;
 
 // otra fsm
 // saltamos del estado de BEAT (cuando soy el lider) al estado de RESPONDER (cuando no lo soy)
@@ -19,13 +22,19 @@ pub struct BeaterResponder {
 }
 
 impl BeaterResponder {
-    pub fn new(pid: u8, data_socket: Arc<UdpSocket>, coordinator_socket: Arc<UdpSocket>, ok_timeout_handler_addr: Addr<OkTimeoutHandler>, pinger_finder_addr: Addr<PingerFinder>) -> Self {
+    pub fn new(
+        pid: u8,
+        data_socket: Arc<UdpSocket>,
+        coordinator_socket: Arc<UdpSocket>,
+        ok_timeout_handler_addr: Addr<OkTimeoutHandler>,
+        pinger_finder_addr: Addr<PingerFinder>,
+    ) -> Self {
         BeaterResponder {
             pid,
             data_socket,
             coordinator_socket,
             ok_timeout_handler_addr,
-            pinger_finder_addr
+            pinger_finder_addr,
         }
     }
 }
@@ -49,7 +58,11 @@ impl Handler<Beat> for BeaterResponder {
             if let Ok((_, addr)) = sock.recv_from(&mut buf).await {
                 // logger("recibi <buf (PING)> de <addr>");
                 // let it crash
-                println!("[BEATER from PID {}] received {}", my_pid, String::from_utf8_lossy(buf.as_slice()));
+                println!(
+                    "[BEATER from PID {}] received {}",
+                    my_pid,
+                    String::from_utf8_lossy(buf.as_slice())
+                );
                 sock.send_to("PONG".as_bytes(), addr).await.unwrap();
             }
         };
@@ -125,22 +138,23 @@ impl Handler<Responder> for BeaterResponder {
             match state {
                 FindNew => {
                     me.pinger_finder_addr.do_send(Find::new(ctx.address()));
-                },
+                }
                 StartPing(ping_id) => {
                     me.pinger_finder_addr.do_send(SetNewLeader::new(ping_id));
-                    me.pinger_finder_addr.do_send(Ping::new(ping_id, ctx.address()));
-                },
+                    me.pinger_finder_addr
+                        .do_send(Ping::new(ping_id, ctx.address()));
+                }
                 _ => {}
             }
             ctx.address().do_send(msg)
-    }))
+        }))
     }
 }
 
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct BroadcastCoordinator {
-    all_pids: Vec<u8>
+    all_pids: Vec<u8>,
 }
 
 impl BroadcastCoordinator {
@@ -148,7 +162,6 @@ impl BroadcastCoordinator {
         BroadcastCoordinator { all_pids }
     }
 }
-
 
 impl Handler<BroadcastCoordinator> for BeaterResponder {
     type Result = ResponseActFuture<Self, ()>;
@@ -162,13 +175,16 @@ impl Handler<BroadcastCoordinator> for BeaterResponder {
             let mut futures_buffer = vec![];
             for other_pid in msg.all_pids {
                 if other_pid != my_pid {
-                    futures_buffer.push(socket.send_to(buffer_coordinator.as_slice(), id_to_ctrladdr(other_pid as usize)));
+                    futures_buffer.push(socket.send_to(
+                        buffer_coordinator.as_slice(),
+                        id_to_ctrladdr(other_pid as usize),
+                    ));
                 }
             }
             join_all(futures_buffer).await;
         };
 
-        Box::pin(fut.into_actor(self).map(|_, _,ctx| {
+        Box::pin(fut.into_actor(self).map(|_, _, ctx| {
             ctx.address().do_send(Beat {});
         }))
     }

@@ -8,11 +8,11 @@ use alglobo_common_utils::transaction_request::TransactionRequest;
 use alglobo_common_utils::transaction_state::TransactionState;
 use std::collections::HashMap;
 
+use crate::file_reader::FindTransaction;
 use crate::logger::LoggerActor;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::net::UdpSocket;
-use crate::file_reader::FindTransaction;
 
 pub struct EntitySender {
     stream: Arc<UdpSocket>,
@@ -21,7 +21,7 @@ pub struct EntitySender {
     coordinator_addr: Addr<TransactionCoordinator>,
     statistics_handler: Addr<StatisticsHandler>,
     transaction_timestamps: HashMap<u64, Instant>,
-    file_reader: Option<Addr<FileReader>>
+    file_reader: Option<Addr<FileReader>>,
 }
 
 impl EntitySender {
@@ -40,7 +40,7 @@ impl EntitySender {
             coordinator_addr,
             statistics_handler,
             transaction_timestamps: HashMap::new(),
-            file_reader: None
+            file_reader: None,
         }
     }
 }
@@ -163,7 +163,7 @@ impl Handler<BroadcastTransactionState> for EntitySender {
                     if let Some(reader) = &me.file_reader {
                         reader.do_send(FindTransaction::new(msg.transaction_id));
                     }
-                },
+                }
                 _ => {}
             }
         }))
@@ -173,7 +173,7 @@ impl Handler<BroadcastTransactionState> for EntitySender {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct RegisterFileReader {
-    file_reader_addr: Addr<FileReader>
+    file_reader_addr: Addr<FileReader>,
 }
 
 impl RegisterFileReader {

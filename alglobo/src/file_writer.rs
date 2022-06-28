@@ -56,8 +56,14 @@ impl Handler<FailedTransaction> for FileWriter {
     type Result = ();
 
     fn handle(&mut self, msg: FailedTransaction, _ctx: &mut Self::Context) -> Self::Result {
-        if let Err(what) = self.transaction_file.write_record(msg.raw_transaction.as_byte_record()) {
-            self.logger.do_send(LogMessage::new(format!("Saved failed transaction, with error message: {}", what)));
+        if let Err(what) = self
+            .transaction_file
+            .write_record(msg.raw_transaction.as_byte_record())
+        {
+            self.logger.do_send(LogMessage::new(format!(
+                "Saved failed transaction, with error message: {}",
+                what
+            )));
         }
     }
 }

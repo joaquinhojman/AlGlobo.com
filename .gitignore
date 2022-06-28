@@ -3,6 +3,7 @@
 /banco/target/
 /aerolinea/target/
 /hotel/target/
+/alglobo-commons-utils/target/
 
 Cargo.lock
 /alglobo/Cargo.lock
@@ -11,3 +12,6 @@ Cargo.lock
 /hotel/Cargo.lock
 
 /alglobo/logf.log
+/aerolinea/aerolinea.log
+/hotel/hotel.log
+/banco/banco.log

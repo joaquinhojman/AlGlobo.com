@@ -2,7 +2,10 @@ use std::collections::HashSet;
 
 use std::time::Duration;
 
-use actix::{Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, ResponseActFuture, Running, WrapFuture};
+use actix::{
+    Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, ResponseActFuture,
+    Running, WrapFuture,
+};
 use actix_rt::ArbiterHandle;
 
 const LOG_PERIOD_S: u64 = 1;

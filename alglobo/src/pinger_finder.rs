@@ -1,13 +1,16 @@
+use crate::beater_responder::{Beat, BeaterResponder};
+use crate::ok_timeout_handler::{OkTimeoutHandler, WaitTimeout};
 use crate::{id_to_ctrladdr, id_to_dataaddr, Responder};
-use actix::{Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, ResponseActFuture, WrapFuture};
+use actix::{
+    Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, ResponseActFuture,
+    WrapFuture,
+};
+use futures::future::join_all;
 use std::sync::Arc;
 use std::time::Duration;
-use futures::future::join_all;
 use tokio::net::UdpSocket;
 use tokio::sync::oneshot::{Receiver, Sender};
 use tokio::time::{sleep, timeout};
-use crate::beater_responder::{Beat, BeaterResponder};
-use crate::ok_timeout_handler::{OkTimeoutHandler, WaitTimeout};
 
 const PING: &[u8] = "PING".as_bytes();
 const PING_PONG_SIZE: usize = 4;
@@ -57,15 +60,12 @@ impl Actor for PingerFinder {
 #[rtype(result = "()")]
 pub struct Ping {
     ping_id: u8,
-    responder: Addr<BeaterResponder>
+    responder: Addr<BeaterResponder>,
 }
 
 impl Ping {
     pub fn new(ping_id: u8, responder: Addr<BeaterResponder>) -> Self {
-        Ping {
-            ping_id,
-            responder
-        }
+        Ping { ping_id, responder }
     }
 }
 
@@ -84,7 +84,11 @@ impl Handler<Ping> for PingerFinder {
             match timeout(Duration::from_secs(TIMEOUT_S), recv_fut).await {
                 Ok(_) => {
                     // avoid ping ddos
-                    println!("[PID {}] received {:?}", my_pid, String::from_utf8_lossy(buf.as_slice()));
+                    println!(
+                        "[PID {}] received {:?}",
+                        my_pid,
+                        String::from_utf8_lossy(buf.as_slice())
+                    );
                     sleep(Duration::from_secs(PING_RATE_S)).await;
                     Ok(())
                 }
@@ -100,7 +104,7 @@ impl Handler<Ping> for PingerFinder {
             Err(_) => {
                 println!("Error");
                 ctx.address().do_send(Find::new(msg.responder))
-            },
+            }
         }))
     }
 }
@@ -108,7 +112,7 @@ impl Handler<Ping> for PingerFinder {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct Find {
-    responder: Addr<BeaterResponder>
+    responder: Addr<BeaterResponder>,
 }
 
 impl Find {
@@ -133,7 +137,6 @@ impl Handler<Find> for PingerFinder {
             return Box::pin(std::future::ready(()).into_actor(self));
         }
 
-
         // seteamos el leader en None, ya que si estamos acá es porque fallo ping (y/o no hay lider)
         self.leader = None;
 
@@ -148,7 +151,8 @@ impl Handler<Find> for PingerFinder {
         let fut = async move {
             let mut send_futures = vec![];
             for pid in &filtered_pids {
-                send_futures.push(sock.send_to(send_buffer.as_slice(), id_to_ctrladdr(*pid as usize)));
+                send_futures
+                    .push(sock.send_to(send_buffer.as_slice(), id_to_ctrladdr(*pid as usize)));
             }
             // mandar al ok timeout handler que empiece a escuchar
             // esto esta antes de tal manera de evitar race conditions
@@ -168,7 +172,7 @@ impl Handler<Find> for PingerFinder {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct SetNewLeader {
-    leader: u8
+    leader: u8,
 }
 
 impl SetNewLeader {

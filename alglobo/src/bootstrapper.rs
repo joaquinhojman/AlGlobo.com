@@ -1,14 +1,18 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, SyncContext, WrapFuture};
-use alglobo_common_utils::entity_type::EntityType;
-use tokio::net::UdpSocket;
-use crate::{EntityReceiver, EntitySender, FileReader, LoggerActor, LogMessage, LogPeriodically, ReadStatus, ReceiveEntityResponse, ServeNextTransaction, StatisticsHandler, TransactionCoordinator, TransactionDispatcher};
 use crate::entity_sender::RegisterFileReader;
 use crate::file_writer::FileWriter;
+use crate::{
+    EntityReceiver, EntitySender, FileReader, LogMessage, LogPeriodically, LoggerActor, ReadStatus,
+    ReceiveEntityResponse, ServeNextTransaction, StatisticsHandler, TransactionCoordinator,
+    TransactionDispatcher,
+};
+use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, SyncContext, WrapFuture};
+use alglobo_common_utils::entity_type::EntityType;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::net::UdpSocket;
 
 pub struct Bootstrapper {
-    file_path: String
+    file_path: String,
 }
 
 impl Actor for Bootstrapper {
@@ -78,20 +82,20 @@ impl Bootstrapper {
                 logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
                 panic!("ERROR: {}", e)
             }
-
-        }.start();
-
-        let log_c = logger_addr.clone();
-        let file_reader = match FileReader::new(file_path, transaction_dispatcher, file_writer, log_c) {
-            Ok(file_reader) => file_reader,
-            Err(e) => {
-                logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                panic!("ERROR: {}", e)
-            }
         }
         .start();
-        sender_clone.do_send(RegisterFileReader::new(file_reader.clone()));
 
+        let log_c = logger_addr.clone();
+        let file_reader =
+            match FileReader::new(file_path, transaction_dispatcher, file_writer, log_c) {
+                Ok(file_reader) => file_reader,
+                Err(e) => {
+                    logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
+                    panic!("ERROR: {}", e)
+                }
+            }
+            .start();
+        sender_clone.do_send(RegisterFileReader::new(file_reader.clone()));
 
         // esta logica no se donde debería ir
         let msg = ServeNextTransaction {};
@@ -114,13 +118,10 @@ impl Bootstrapper {
     }
 }
 
-
-
-
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct RunAlGlobo {
-    logger_addr: Addr<LoggerActor>
+    logger_addr: Addr<LoggerActor>,
 }
 
 impl RunAlGlobo {

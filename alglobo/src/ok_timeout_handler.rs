@@ -1,25 +1,32 @@
-use std::time::Duration;
-use actix::{Actor, ActorFutureExt, Addr, Context, Handler, Message, ResponseActFuture, WrapFuture};
+use crate::beater_responder::BroadcastCoordinator;
+use crate::bootstrapper::{Bootstrapper, RunAlGlobo};
+use crate::{BeaterResponder, LoggerActor};
+use actix::{
+    Actor, ActorFutureExt, Addr, Context, Handler, Message, ResponseActFuture, WrapFuture,
+};
 use alglobo_common_utils::entity_logger::Logger;
+use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
-use crate::beater_responder::BroadcastCoordinator;
-use crate::{BeaterResponder, LoggerActor};
-use crate::bootstrapper::{Bootstrapper, RunAlGlobo};
-
 
 pub struct OkTimeoutHandler {
     sender: Option<oneshot::Sender<u8>>,
     receiver: Option<oneshot::Receiver<u8>>,
     pid: u8,
     bootstrapper: Addr<Bootstrapper>,
-    logger: Addr<LoggerActor>
+    logger: Addr<LoggerActor>,
 }
 
 impl OkTimeoutHandler {
     pub fn new(pid: u8, bootstrapper: Addr<Bootstrapper>, logger: Addr<LoggerActor>) -> Self {
         let (tx, rx) = oneshot::channel();
-        OkTimeoutHandler { sender: Some(tx), receiver: Some(rx), pid, bootstrapper, logger }
+        OkTimeoutHandler {
+            sender: Some(tx),
+            receiver: Some(rx),
+            pid,
+            bootstrapper,
+            logger,
+        }
     }
 }
 
@@ -31,12 +38,15 @@ impl Actor for OkTimeoutHandler {
 #[rtype(result = "()")]
 pub struct WaitTimeout {
     responder: Addr<BeaterResponder>,
-    all_pids: Vec<u8>
+    all_pids: Vec<u8>,
 }
 
 impl WaitTimeout {
     pub fn new(responder: Addr<BeaterResponder>, all_pids: Vec<u8>) -> Self {
-        WaitTimeout { responder, all_pids }
+        WaitTimeout {
+            responder,
+            all_pids,
+        }
     }
 }
 
@@ -62,10 +72,11 @@ impl Handler<WaitTimeout> for OkTimeoutHandler {
                     // todavia no sabes cual es el coordinador
                     // esperar coordinador
                     Ok(())
-                },
+                }
                 Err(_) => {
                     println!("[PID {}] timeout, mandando coordinator", pid);
-                    msg.responder.do_send(BroadcastCoordinator::new(msg.all_pids));
+                    msg.responder
+                        .do_send(BroadcastCoordinator::new(msg.all_pids));
                     bootstrapper.do_send(RunAlGlobo::new(logger));
                     Err(())
                 }
