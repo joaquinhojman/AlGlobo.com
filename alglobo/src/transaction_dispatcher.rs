@@ -62,9 +62,10 @@ impl Handler<ReceiveTransaction> for TransactionDispatcher {
     ) -> Self::Result {
         let transaction = raw_transaction.deserialize(&self.logger);
         let msg = PrepareTransaction::new(transaction);
-        self.logger.do_send(LogMessage::new(
+        /*self.logger.do_send(LogMessage::new(
             "[DISPATCHER] sending to messenger".to_string(),
         ));
+         */
         let _ = self.messenger.do_send(msg);
     }
 }
