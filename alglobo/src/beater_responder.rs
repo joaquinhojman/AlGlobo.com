@@ -113,7 +113,6 @@ impl Handler<Responder> for BeaterResponder {
                         StartPing(id_from)
                     }
                     _ => {
-                        println!("WTF");
                         Continue
                     }
                 }

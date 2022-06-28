@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::net::UdpSocket;
 use crate::file_reader::FindTransaction;
+use crate::file_writer::{FileWriter, RegisterDoneTransactionId};
 
 pub struct EntitySender {
     stream: Arc<UdpSocket>,
@@ -21,7 +22,8 @@ pub struct EntitySender {
     coordinator_addr: Addr<TransactionCoordinator>,
     statistics_handler: Addr<StatisticsHandler>,
     transaction_timestamps: HashMap<u64, Instant>,
-    file_reader: Option<Addr<FileReader>>
+    file_reader: Option<Addr<FileReader>>,
+    file_writer: Option<Addr<FileWriter>>
 }
 
 impl EntitySender {
@@ -40,7 +42,8 @@ impl EntitySender {
             coordinator_addr,
             statistics_handler,
             transaction_timestamps: HashMap::new(),
-            file_reader: None
+            file_reader: None,
+            file_writer: None
         }
     }
 }
@@ -158,6 +161,9 @@ impl Handler<BroadcastTransactionState> for EntitySender {
                 "[EntitySender] broadcast_state transaction id: {}",
                 msg.transaction_id
             )));
+            if let Some(writer) = &me.file_writer {
+                writer.do_send(RegisterDoneTransactionId::new(msg.transaction_id));
+            }
             match msg.transaction_state {
                 TransactionState::Abort => {
                     if let Some(reader) = &me.file_reader {
@@ -172,20 +178,22 @@ impl Handler<BroadcastTransactionState> for EntitySender {
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct RegisterFileReader {
-    file_reader_addr: Addr<FileReader>
+pub struct RegisterFileHandles {
+    file_reader_addr: Addr<FileReader>,
+    file_writer_addr: Addr<FileWriter>
 }
 
-impl RegisterFileReader {
-    pub fn new(file_reader_addr: Addr<FileReader>) -> Self {
-        RegisterFileReader { file_reader_addr }
+impl RegisterFileHandles {
+    pub fn new(file_reader_addr: Addr<FileReader>, file_writer_addr: Addr<FileWriter>) -> Self {
+        Self { file_reader_addr, file_writer_addr }
     }
 }
 
-impl Handler<RegisterFileReader> for EntitySender {
+impl Handler<RegisterFileHandles> for EntitySender {
     type Result = ();
 
-    fn handle(&mut self, msg: RegisterFileReader, _: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RegisterFileHandles, _: &mut Self::Context) -> Self::Result {
         self.file_reader = Some(msg.file_reader_addr);
+        self.file_writer = Some(msg.file_writer_addr);
     }
 }

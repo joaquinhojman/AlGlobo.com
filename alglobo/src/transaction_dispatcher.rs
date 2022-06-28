@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use crate::entity_sender::{EntitySender, PrepareTransaction};
 use crate::LogMessage;
 use actix::{Actor, Addr, Context, Handler, Message};
@@ -14,6 +15,7 @@ const HEADER_AIRLINE: &str = "airline_cost";
 pub struct TransactionDispatcher {
     messenger: Addr<EntitySender>,
     logger: Addr<LoggerActor>,
+    done_transactions: HashSet<u64>
 }
 
 impl TransactionDispatcher {
@@ -21,7 +23,7 @@ impl TransactionDispatcher {
         logger.do_send(LogMessage::new(
             "Creating TransactionDispatcher...".to_string(),
         ));
-        TransactionDispatcher { messenger, logger }
+        TransactionDispatcher { messenger, logger, done_transactions: HashSet::new() }
     }
 }
 
@@ -61,11 +63,30 @@ impl Handler<ReceiveTransaction> for TransactionDispatcher {
         _ctx: &mut Self::Context,
     ) -> Self::Result {
         let transaction = raw_transaction.deserialize(&self.logger);
-        let msg = PrepareTransaction::new(transaction);
-        /*self.logger.do_send(LogMessage::new(
-            "[DISPATCHER] sending to messenger".to_string(),
-        ));
-         */
-        let _ = self.messenger.do_send(msg);
+        // if transaction has not already been done, we go ahead and commit
+        if !self.done_transactions.contains(&transaction.get_transaction_id()) {
+            let msg = PrepareTransaction::new(transaction);
+            let _ = self.messenger.do_send(msg);
+        }
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct SaveDoneTransactions {
+    transactions: HashSet<u64>,
+}
+
+impl SaveDoneTransactions {
+    pub fn new(transactions: HashSet<u64>) -> Self {
+        Self { transactions }
+    }
+}
+
+impl Handler<SaveDoneTransactions> for TransactionDispatcher {
+    type Result = ();
+
+    fn handle(&mut self, msg: SaveDoneTransactions, _: &mut Self::Context) -> Self::Result {
+        self.done_transactions = msg.transactions;
     }
 }

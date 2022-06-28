@@ -13,7 +13,7 @@ use tokio::sync::oneshot;
 use tokio::sync::oneshot::Sender;
 use tokio::time::timeout;
 
-const TIMEOUT_S: u64 = 10;
+const TIMEOUT_S: u64 = 30;
 
 pub struct TransactionCoordinator {
     transaction_log: HashMap<u64, TransactionState>,

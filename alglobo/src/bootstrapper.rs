@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::Seek;
 use std::sync::{Arc, Mutex};
 use actix::{Actor, Addr, Context, Handler, Message, SyncContext, WrapFuture};
 use actix_rt::Arbiter;
@@ -6,7 +8,8 @@ use alglobo_common_utils::entity_type::EntityType;
 use tokio::net::UdpSocket;
 use tokio::sync::oneshot;
 use crate::{EntityReceiver, EntitySender, FileReader, LoggerActor, LogMessage, ReadStatus, ReceiveEntityResponse, ServeNextTransaction, StatisticsHandler, TransactionCoordinator, TransactionDispatcher};
-use crate::entity_sender::RegisterFileReader;
+use crate::entity_sender::RegisterFileHandles;
+use crate::file_reader::{DONE_TRANSACTIONS_PATH, ReadDoneTransactions};
 use crate::file_writer::FileWriter;
 
 pub struct Bootstrapper {
@@ -79,33 +82,37 @@ impl Bootstrapper {
         let reader_writer_arbiter = Arbiter::new();
 
         let (tx_rd, rx_rd) = oneshot::channel();
+        let (tx_wr, rx_wr) = oneshot::channel();
 
         let reader_writer_execution = async move {
             let file_writer = match FileWriter::new("failed_transactions.csv".to_string(), log_c) {
                 Ok(file_writer) => file_writer,
                 Err(e) => {
                     logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                    panic!("ERROR: {}", e)
+                    panic!("ERROR: {}", e);
                 }
 
             }.start();
-            let file_writer = file_writer.clone();
+            let file_writer_clone  = file_writer.clone();
 
             let file_reader = match FileReader::new(file_path, transaction_dispatcher, file_writer, log_c2) {
                 Ok(file_reader) => file_reader,
                 Err(e) => {
                     logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                    panic!("ERROR: {}", e)
+                    panic!("ERROR: {}", e);
                 }
             }.start();
+            file_reader.do_send(ReadDoneTransactions {});
             let _ = tx_rd.send(file_reader);
+            let _ = tx_wr.send(file_writer_clone);
         };
 
         let _ = reader_writer_arbiter.spawn(reader_writer_execution);
         let file_reader = rx_rd.await.unwrap();
+        let file_writer = rx_wr.await.unwrap();
 
 
-        sender_clone.do_send(RegisterFileReader::new(file_reader.clone()));
+        sender_clone.do_send(RegisterFileHandles::new(file_reader.clone(), file_writer));
 
         // esta logica no se donde debería ir
         let msg = ServeNextTransaction {};
@@ -121,7 +128,7 @@ impl Bootstrapper {
                 }
                 ReadStatus::ParseError(e) => {
                     log_c3.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                    panic!("ERROR: {}", e)
+                    panic!("ERROR: {}", e);
                 }
             }
         }
