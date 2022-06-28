@@ -2,12 +2,10 @@ use std::collections::HashSet;
 
 use std::time::Duration;
 
-use actix::{Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, ResponseActFuture, Running, WrapFuture};
-use actix_rt::ArbiterHandle;
+use actix::{Actor, ActorFutureExt, AsyncContext, Context, Handler, Message, ResponseActFuture, Running, WrapFuture};
 
 const LOG_PERIOD_S: u64 = 1;
 
-// TODO: cambiar este nombre de mierda
 pub struct StatisticsHandler {
     transaction_id_timestamp_set: HashSet<u64>,
     total_transactions: u64,
@@ -140,7 +138,7 @@ impl Handler<LogPeriodically> for StatisticsHandler {
                     } else {
                         me.elapsed_time.as_secs() as f64 / me.current_finished_transactions as f64
                     };
-                    let tps = me.current_finished_transactions as f64 / mean_time;
+                    let tps = me.current_finished_transactions as f64 / me.elapsed_time.as_secs() as f64;
                     println!("[STATS]\n\t- Total transactions: {}\n\t- Finished Transactions: {}\n\t- Mean time {}s\n\t- Finished transactions per second: {}\n", me.total_transactions, me.current_finished_transactions, mean_time, tps);
                     ctx.address().do_send(LogPeriodically {})
                 })
