@@ -1,5 +1,5 @@
 use crate::LogMessage;
-use actix::{Actor, Addr, Context, Handler, Message, Running};
+use actix::{Actor, Addr, Context, Handler, Message};
 use std::fs::File;
 
 use crate::logger::LoggerActor;

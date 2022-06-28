@@ -1,11 +1,11 @@
 use crate::entity_sender::RegisterFileReader;
 use crate::file_writer::FileWriter;
 use crate::{
-    EntityReceiver, EntitySender, FileReader, LogMessage, LogPeriodically, LoggerActor, ReadStatus,
+    EntityReceiver, EntitySender, FileReader, LogMessage, LoggerActor, ReadStatus,
     ReceiveEntityResponse, ServeNextTransaction, StatisticsHandler, TransactionCoordinator,
     TransactionDispatcher,
 };
-use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, SyncContext, WrapFuture};
+use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, WrapFuture};
 use alglobo_common_utils::entity_type::EntityType;
 use std::collections::HashMap;
 use std::sync::Arc;

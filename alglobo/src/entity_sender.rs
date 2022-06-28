@@ -158,13 +158,10 @@ impl Handler<BroadcastTransactionState> for EntitySender {
                 "[EntitySender] broadcast_state transaction id: {}",
                 msg.transaction_id
             )));
-            match msg.transaction_state {
-                TransactionState::Abort => {
-                    if let Some(reader) = &me.file_reader {
-                        reader.do_send(FindTransaction::new(msg.transaction_id));
-                    }
+            if let TransactionState::Abort = msg.transaction_state {
+                if let Some(reader) = &me.file_reader {
+                    reader.do_send(FindTransaction::new(msg.transaction_id));
                 }
-                _ => {}
             }
         }))
     }

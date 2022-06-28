@@ -1,10 +1,10 @@
 use crate::beater_responder::ResponderState::{Continue, FindNew, StartPing};
 use crate::ok_timeout_handler::{OkTimeoutHandler, RegisterOkReceived};
 use crate::pinger_finder::{Find, PingerFinder, SetNewLeader};
-use crate::{id_to_ctrladdr, id_to_dataaddr, Ping};
+use crate::{id_to_ctrladdr, Ping};
 use actix::{
-    Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, MessageResponse,
-    ResponseActFuture, WrapFuture,
+    Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, ResponseActFuture,
+    WrapFuture,
 };
 use futures::future::join_all;
 use std::sync::Arc;
@@ -92,7 +92,7 @@ enum ResponderState {
 impl Handler<Responder> for BeaterResponder {
     type Result = ResponseActFuture<Self, ()>;
 
-    fn handle(&mut self, msg: Responder, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Responder, _ctx: &mut Self::Context) -> Self::Result {
         let sock = self.coordinator_socket.clone();
         let my_pid = self.pid;
         let addr_timeout_handler = self.ok_timeout_handler_addr.clone();
@@ -166,7 +166,7 @@ impl BroadcastCoordinator {
 impl Handler<BroadcastCoordinator> for BeaterResponder {
     type Result = ResponseActFuture<Self, ()>;
 
-    fn handle(&mut self, msg: BroadcastCoordinator, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: BroadcastCoordinator, _ctx: &mut Self::Context) -> Self::Result {
         let socket = self.coordinator_socket.clone();
         let my_pid = self.pid;
 

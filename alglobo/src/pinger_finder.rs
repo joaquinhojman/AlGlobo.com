@@ -1,6 +1,6 @@
-use crate::beater_responder::{Beat, BeaterResponder};
+use crate::beater_responder::BeaterResponder;
 use crate::ok_timeout_handler::{OkTimeoutHandler, WaitTimeout};
-use crate::{id_to_ctrladdr, id_to_dataaddr, Responder};
+use crate::{id_to_ctrladdr, id_to_dataaddr};
 use actix::{
     Actor, ActorFutureExt, Addr, AsyncContext, Context, Handler, Message, ResponseActFuture,
     WrapFuture,
@@ -9,7 +9,6 @@ use futures::future::join_all;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
-use tokio::sync::oneshot::{Receiver, Sender};
 use tokio::time::{sleep, timeout};
 
 const PING: &[u8] = "PING".as_bytes();
@@ -124,7 +123,7 @@ impl Find {
 impl Handler<Find> for PingerFinder {
     type Result = ResponseActFuture<Self, ()>;
 
-    fn handle(&mut self, msg: Find, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: Find, _ctx: &mut Self::Context) -> Self::Result {
         // 1: enviar mensaje election a todos los que tengan mayor id
         // 2: esperar hasta timeout que me respondan
         // 2a: si me responden, me quedo calmadito y espero a que alguien se declare lider
@@ -145,7 +144,7 @@ impl Handler<Find> for PingerFinder {
         let my_pid = self.pid;
         let filtered_pids = self.filtered_pids.clone();
         let send_buffer = vec![b'E', my_pid];
-        let responder = msg.responder.clone();
+        let responder = msg.responder;
         let all_pids = self.all_pids.clone();
 
         let fut = async move {
@@ -184,7 +183,7 @@ impl SetNewLeader {
 impl Handler<SetNewLeader> for PingerFinder {
     type Result = ();
 
-    fn handle(&mut self, msg: SetNewLeader, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: SetNewLeader, _ctx: &mut Self::Context) -> Self::Result {
         self.leader = Some(msg.leader);
     }
 }

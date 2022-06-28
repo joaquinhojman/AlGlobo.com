@@ -96,6 +96,12 @@ fn seconds_to_datetime(ts: i64, tm: &mut DateTime) {
     tm.day = dayno as i32 + 1;
 }
 
+impl Default for DateTime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct Logger {
     file: File,
 }

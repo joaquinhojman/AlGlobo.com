@@ -44,8 +44,7 @@ impl From<Vec<u8>> for EntityPayload {
 // TODO: even more testing
 impl From<EntityPayload> for Vec<u8> {
     fn from(data: EntityPayload) -> Self {
-        let mut res = Vec::new();
-        res.push(data.transaction_state.into());
+        let mut res = vec![data.transaction_state.into()];
         res.extend_from_slice(&data.transaction_id.to_be_bytes());
         res.extend_from_slice(&data.cost.to_be_bytes());
         res

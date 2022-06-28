@@ -22,7 +22,7 @@ use transaction_dispatcher::TransactionDispatcher;
 use crate::entity_receiver::{EntityReceiver, ReceiveEntityResponse};
 use crate::entity_sender::EntitySender;
 use crate::file_reader::{ReadStatus, ServeNextTransaction};
-use crate::statistics_handler::{LogPeriodically, StatisticsHandler};
+use crate::statistics_handler::StatisticsHandler;
 use crate::transaction_coordinator::TransactionCoordinator;
 use actix::Actor;
 use actix_rt::{Arbiter, System};
@@ -70,7 +70,7 @@ fn main() -> Result<(), ()> {
         panic!("ERROR: Parametros incorrectos");
     }
 
-    let pid = u8::from_str_radix(argv[1].as_str(), 10).unwrap();
+    let pid = argv[1].as_str().parse::<u8>().unwrap();
     let all_pids = (0..PROCESSES).collect::<Vec<u8>>();
     let filtered_pids = all_pids
         .clone()

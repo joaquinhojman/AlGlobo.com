@@ -4,7 +4,6 @@ use crate::{BeaterResponder, LoggerActor};
 use actix::{
     Actor, ActorFutureExt, Addr, Context, Handler, Message, ResponseActFuture, WrapFuture,
 };
-use alglobo_common_utils::entity_logger::Logger;
 use std::time::Duration;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
@@ -82,7 +81,7 @@ impl Handler<WaitTimeout> for OkTimeoutHandler {
                 }
             }
         };
-        Box::pin(fut.into_actor(self).map(|_, _, ctx| {}))
+        Box::pin(fut.into_actor(self).map(|_, _, _ctx| {}))
     }
 }
 
@@ -94,7 +93,7 @@ pub struct RegisterOkReceived {}
 impl Handler<RegisterOkReceived> for OkTimeoutHandler {
     type Result = ();
 
-    fn handle(&mut self, msg: RegisterOkReceived, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, _msg: RegisterOkReceived, _ctx: &mut Self::Context) -> Self::Result {
         if self.sender.is_some() {
             let tx = self.sender.take().unwrap();
             // envio fruta, total es para despertar al timeout
