@@ -33,8 +33,6 @@ fn main() {
                         TransactionResponse::new(transaction_id, TransactionState::Abort)
                     }
                     None => {
-                        // SOLO ACA PUEDE FALLAR!!!
-                        // TODO: la falla tambien puede ser un timeout esporadico, cualquiera es valida, y ambas al mismo tiempo tambien
                         let x: f64 = rng.gen();
                         if x > 0.1 {
                             log.insert(transaction_id, TransactionState::Accept);
@@ -53,19 +51,15 @@ fn main() {
                 logger.log("TransactionState: Commit".to_string());
                 match log.get(&transaction_id) {
                     Some(TransactionState::Accept) => {
-                        // TODO: escribir al log!!! si nos llego commit y todos habiamos aceptado entonces ya esta
-                        // Ojito, que pasa si se falla en la fase de commit? El algoritmo este no lo maneja...
                         log.insert(transaction_id, TransactionState::Commit);
                         logger.log("TransactionResponse: Commit".to_string());
                         TransactionResponse::new(transaction_id, TransactionState::Commit)
                     }
                     Some(TransactionState::Commit) => {
-                        // solo respondemos con commit, no esribimos nada porque de hecho ya lo hicimos
                         logger.log("TransactionResponse: Commit".to_string());
                         TransactionResponse::new(transaction_id, TransactionState::Commit)
                     }
                     Some(TransactionState::Abort) | None => {
-                        // fallar
                         logger.log("PANICK; TransactionState::Abort cannot be handled by two fase transactionality algorithm".to_string());
                         panic!("This cannot be handled by two fase transactionality algorithm!");
                     }
@@ -76,7 +70,6 @@ fn main() {
                 logger.log("TransactionState: Abort".to_string());
                 match log.get(&transaction_id) {
                     Some(TransactionState::Accept) => {
-                        // liberamos los recursos, which actually means nothing here, but to write abort
                         log.insert(transaction_id, TransactionState::Abort);
                         logger.log("TransactionResponse: Abort".to_string());
                         TransactionResponse::new(transaction_id, TransactionState::Abort)
@@ -93,7 +86,7 @@ fn main() {
                     _ => panic!("This cannot be handled by two fase transactionality algorithm!"),
                 }
             }
-            _ => panic!("wtf"),
+            _ => panic!("TransactionState Unknow"),
         };
 
         let response_payload: Vec<u8> = response.into();

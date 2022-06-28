@@ -10,7 +10,6 @@ pub struct TransactionRequest {
     airline_cost: u64,
 }
 
-// TODO: refactor
 impl TransactionRequest {
     pub fn get_entities_data(&self) -> Vec<(EntityType, EntityPayload)> {
         let mut data = vec![];

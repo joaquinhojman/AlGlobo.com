@@ -8,7 +8,6 @@ use actix::{
 
 const LOG_PERIOD_S: u64 = 1;
 
-// TODO: cambiar este nombre de mierda
 pub struct StatisticsHandler {
     transaction_id_timestamp_set: HashSet<u64>,
     total_transactions: u64,
@@ -127,7 +126,6 @@ impl Handler<GetMeanDuration> for StatisticsHandler {
 #[rtype(result = "()")]
 pub struct LogPeriodically {}
 
-// TODO: refactor
 impl Handler<LogPeriodically> for StatisticsHandler {
     type Result = ResponseActFuture<Self, ()>;
 

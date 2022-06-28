@@ -66,7 +66,6 @@ impl Handler<PrepareTransaction> for EntitySender {
 
     fn handle(&mut self, msg: PrepareTransaction, ctx: &mut Self::Context) -> Self::Result {
         // registramos primero que vamos a esperar a esta transaccion
-        // TODO: fix race condition
         let _r = self
             .coordinator_addr
             .do_send(WaitTransactionStateResponse::new(
