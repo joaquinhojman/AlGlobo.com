@@ -1,8 +1,8 @@
-use std::collections::HashSet;
 use crate::entity_sender::{EntitySender, PrepareTransaction};
 use crate::LogMessage;
 use actix::{Actor, Addr, Context, Handler, Message};
 use alglobo_common_utils::transaction_request::TransactionRequest;
+use std::collections::HashSet;
 
 use crate::logger::LoggerActor;
 use csv::StringRecord;
@@ -15,7 +15,7 @@ const HEADER_AIRLINE: &str = "airline_cost";
 pub struct TransactionDispatcher {
     messenger: Addr<EntitySender>,
     logger: Addr<LoggerActor>,
-    done_transactions: HashSet<u64>
+    done_transactions: HashSet<u64>,
 }
 
 impl TransactionDispatcher {
@@ -23,7 +23,11 @@ impl TransactionDispatcher {
         logger.do_send(LogMessage::new(
             "Creating TransactionDispatcher...".to_string(),
         ));
-        TransactionDispatcher { messenger, logger, done_transactions: HashSet::new() }
+        TransactionDispatcher {
+            messenger,
+            logger,
+            done_transactions: HashSet::new(),
+        }
     }
 }
 
@@ -64,7 +68,10 @@ impl Handler<ReceiveTransaction> for TransactionDispatcher {
     ) -> Self::Result {
         let transaction = raw_transaction.deserialize(&self.logger);
         // if transaction has not already been done, we go ahead and commit
-        if !self.done_transactions.contains(&transaction.get_transaction_id()) {
+        if !self
+            .done_transactions
+            .contains(&transaction.get_transaction_id())
+        {
             let msg = PrepareTransaction::new(transaction);
             let _ = self.messenger.do_send(msg);
         }

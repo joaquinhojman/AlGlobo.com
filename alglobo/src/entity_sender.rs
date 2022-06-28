@@ -9,13 +9,11 @@ use alglobo_common_utils::transaction_state::TransactionState;
 use std::collections::HashMap;
 
 use crate::file_reader::FindTransaction;
+use crate::file_writer::{FileWriter, RegisterDoneTransactionId};
 use crate::logger::LoggerActor;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::net::UdpSocket;
-use crate::file_reader::FindTransaction;
-use crate::file_writer::{FileWriter, RegisterDoneTransactionId};
-
 
 pub struct EntitySender {
     stream: Arc<UdpSocket>,
@@ -25,7 +23,7 @@ pub struct EntitySender {
     statistics_handler: Addr<StatisticsHandler>,
     transaction_timestamps: HashMap<u64, Instant>,
     file_reader: Option<Addr<FileReader>>,
-    file_writer: Option<Addr<FileWriter>>
+    file_writer: Option<Addr<FileWriter>>,
 }
 
 impl EntitySender {
@@ -45,7 +43,7 @@ impl EntitySender {
             statistics_handler,
             transaction_timestamps: HashMap::new(),
             file_reader: None,
-            file_writer: None
+            file_writer: None,
         }
     }
 }
@@ -165,13 +163,10 @@ impl Handler<BroadcastTransactionState> for EntitySender {
             if let Some(writer) = &me.file_writer {
                 writer.do_send(RegisterDoneTransactionId::new(msg.transaction_id));
             }
-            match msg.transaction_state {
-                TransactionState::Abort => {
-                    if let Some(reader) = &me.file_reader {
-                        reader.do_send(FindTransaction::new(msg.transaction_id));
-                    }
-                },
-                _ => {}
+            if let TransactionState::Abort = msg.transaction_state {
+                if let Some(reader) = &me.file_reader {
+                    reader.do_send(FindTransaction::new(msg.transaction_id));
+                }
             }
         }))
     }
@@ -181,12 +176,15 @@ impl Handler<BroadcastTransactionState> for EntitySender {
 #[rtype(result = "()")]
 pub struct RegisterFileHandles {
     file_reader_addr: Addr<FileReader>,
-    file_writer_addr: Addr<FileWriter>
+    file_writer_addr: Addr<FileWriter>,
 }
 
 impl RegisterFileHandles {
     pub fn new(file_reader_addr: Addr<FileReader>, file_writer_addr: Addr<FileWriter>) -> Self {
-        Self { file_reader_addr, file_writer_addr }
+        Self {
+            file_reader_addr,
+            file_writer_addr,
+        }
     }
 }
 

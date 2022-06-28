@@ -1,12 +1,11 @@
 use crate::LogMessage;
-use actix::{Actor, Addr, Context, Handler, Message, Running};
+use actix::{Actor, Addr, Context, Handler, Message};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 
-
+use crate::file_reader::DONE_TRANSACTIONS_PATH;
 use crate::logger::LoggerActor;
 use csv::{StringRecord, Writer};
-use crate::file_reader::DONE_TRANSACTIONS_PATH;
 
 const HEADER_ID: &str = "id";
 const HEADER_HOTEL: &str = "hotel_cost";
@@ -28,13 +27,12 @@ impl FileWriter {
         let done_transaction_file = match OpenOptions::new()
             .write(true)
             .append(true)
-            .open(DONE_TRANSACTIONS_PATH) {
-            Ok(file) => {
-                file
-            },
+            .open(DONE_TRANSACTIONS_PATH)
+        {
+            Ok(file) => file,
             Err(_) => {
                 let mut file = File::create(DONE_TRANSACTIONS_PATH).unwrap();
-                file.write("id\n".as_bytes()).expect("TODO: panic message");
+                file.write_all("id\n".as_bytes()).expect("TODO: panic message");
                 file
             }
         };
@@ -44,10 +42,14 @@ impl FileWriter {
             done_transaction_file: Writer::from_writer(done_transaction_file),
             logger,
         };
-        result.done_transaction_file
+        result
+            .done_transaction_file
             .write_record(&[HEADER_ID])
             .expect("could not write record to file");
-        result.done_transaction_file.flush().expect("could not flush");
+        result
+            .done_transaction_file
+            .flush()
+            .expect("could not flush");
         Ok(result)
     }
 }
@@ -61,7 +63,9 @@ impl Actor for FileWriter {
             .write_record(&[HEADER_ID, HEADER_HOTEL, HEADER_BANK, HEADER_AIRLINE])
             .expect("could not write record to file");
 
-        self.failed_transaction_file.flush().expect("could not flush");
+        self.failed_transaction_file
+            .flush()
+            .expect("could not flush");
     }
 }
 
@@ -81,8 +85,14 @@ impl Handler<FailedTransaction> for FileWriter {
     type Result = ();
 
     fn handle(&mut self, msg: FailedTransaction, _ctx: &mut Self::Context) -> Self::Result {
-        if let Err(what) = self.failed_transaction_file.write_record(msg.raw_transaction.as_byte_record()) {
-            self.logger.do_send(LogMessage::new(format!("Saved failed transaction, with error message: {}", what)));
+        if let Err(what) = self
+            .failed_transaction_file
+            .write_record(msg.raw_transaction.as_byte_record())
+        {
+            self.logger.do_send(LogMessage::new(format!(
+                "Saved failed transaction, with error message: {}",
+                what
+            )));
         }
     }
 }
@@ -103,8 +113,14 @@ impl Handler<RegisterDoneTransactionId> for FileWriter {
     type Result = ();
 
     fn handle(&mut self, msg: RegisterDoneTransactionId, _: &mut Self::Context) -> Self::Result {
-        if let Err(what) = self.done_transaction_file.write_record([msg.transaction_id.to_string().as_str()]) {
-            self.logger.do_send(LogMessage::new(format!("Failed to save done transaction id, with error message: {}", what)));
+        if let Err(what) = self
+            .done_transaction_file
+            .write_record([msg.transaction_id.to_string().as_str()])
+        {
+            self.logger.do_send(LogMessage::new(format!(
+                "Failed to save done transaction id, with error message: {}",
+                what
+            )));
         }
     }
 }

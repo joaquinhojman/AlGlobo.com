@@ -1,25 +1,18 @@
-use crate::entity_sender::RegisterFileReader;
+use crate::entity_sender::RegisterFileHandles;
+use crate::file_reader::ReadDoneTransactions;
 use crate::file_writer::FileWriter;
 use crate::{
     EntityReceiver, EntitySender, FileReader, LogMessage, LoggerActor, ReadStatus,
     ReceiveEntityResponse, ServeNextTransaction, StatisticsHandler, TransactionCoordinator,
     TransactionDispatcher,
 };
-use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, WrapFuture};
-use alglobo_common_utils::entity_type::EntityType;
-use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
-use std::io::Seek;
-use std::sync::{Arc, Mutex};
-use actix::{Actor, Addr, Context, Handler, Message, SyncContext, WrapFuture};
+use actix::{Actor, Addr, Context, Handler, Message};
 use actix_rt::Arbiter;
 use alglobo_common_utils::entity_type::EntityType;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::net::UdpSocket;
 use tokio::sync::oneshot;
-use crate::{EntityReceiver, EntitySender, FileReader, LoggerActor, LogMessage, ReadStatus, ReceiveEntityResponse, ServeNextTransaction, StatisticsHandler, TransactionCoordinator, TransactionDispatcher};
-use crate::entity_sender::RegisterFileHandles;
-use crate::file_reader::{DONE_TRANSACTIONS_PATH, ReadDoneTransactions};
-use crate::file_writer::FileWriter;
 
 pub struct Bootstrapper {
     file_path: String,
@@ -100,17 +93,19 @@ impl Bootstrapper {
                     logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
                     panic!("ERROR: {}", e);
                 }
+            }
+            .start();
+            let file_writer_clone = file_writer.clone();
 
-            }.start();
-            let file_writer_clone  = file_writer.clone();
-
-            let file_reader = match FileReader::new(file_path, transaction_dispatcher, file_writer, log_c2) {
-                Ok(file_reader) => file_reader,
-                Err(e) => {
-                    logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                    panic!("ERROR: {}", e);
+            let file_reader =
+                match FileReader::new(file_path, transaction_dispatcher, file_writer, log_c2) {
+                    Ok(file_reader) => file_reader,
+                    Err(e) => {
+                        logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
+                        panic!("ERROR: {}", e);
+                    }
                 }
-            }.start();
+                .start();
             file_reader.do_send(ReadDoneTransactions {});
             let _ = tx_rd.send(file_reader);
             let _ = tx_wr.send(file_writer_clone);
@@ -119,7 +114,6 @@ impl Bootstrapper {
         let _ = reader_writer_arbiter.spawn(reader_writer_execution);
         let file_reader = rx_rd.await.unwrap();
         let file_writer = rx_wr.await.unwrap();
-
 
         sender_clone.do_send(RegisterFileHandles::new(file_reader.clone(), file_writer));
 
@@ -159,7 +153,7 @@ impl RunAlGlobo {
 impl Handler<RunAlGlobo> for Bootstrapper {
     type Result = ();
 
-    fn handle(&mut self, msg: RunAlGlobo, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RunAlGlobo, _ctx: &mut Self::Context) -> Self::Result {
         println!("[BOOTSTRAPPER] spawning alglobo schedule");
         let path = self.file_path.clone();
         actix_rt::spawn(Bootstrapper::run(msg.logger_addr, path));

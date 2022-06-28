@@ -1,6 +1,8 @@
-use std::collections::{HashMap, HashSet};
-use crate::transaction_dispatcher::{ReceiveTransaction, SaveDoneTransactions, TransactionDispatcher};
-use crate::file_writer::{FileWriter, FailedTransaction};
+use crate::file_writer::{FailedTransaction, FileWriter};
+use crate::transaction_dispatcher::{
+    ReceiveTransaction, SaveDoneTransactions, TransactionDispatcher,
+};
+use std::collections::HashSet;
 
 use crate::LogMessage;
 use actix::{Actor, Addr, Context, Handler, Message};
@@ -121,7 +123,7 @@ impl Handler<ReadDoneTransactions> for FileReader {
     fn handle(&mut self, _: ReadDoneTransactions, _: &mut Self::Context) -> Self::Result {
         match Reader::from_path(DONE_TRANSACTIONS_PATH) {
             Ok(mut file) => {
-                let mut done_transactions =HashSet::new();
+                let mut done_transactions = HashSet::new();
                 for opt_id_as_str in file.records() {
                     if let Ok(id_as_str) = opt_id_as_str {
                         if let Ok(id) = u64::from_str(id_as_str.as_slice()) {
@@ -130,9 +132,10 @@ impl Handler<ReadDoneTransactions> for FileReader {
                     }
                 }
                 if !done_transactions.is_empty() {
-                    self.transaction_dispatcher.do_send(SaveDoneTransactions::new(done_transactions));
+                    self.transaction_dispatcher
+                        .do_send(SaveDoneTransactions::new(done_transactions));
                 }
-            },
+            }
             // nothing to register here
             Err(_) => {}
         };
