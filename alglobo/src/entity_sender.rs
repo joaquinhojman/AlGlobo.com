@@ -8,12 +8,14 @@ use alglobo_common_utils::transaction_request::TransactionRequest;
 use alglobo_common_utils::transaction_state::TransactionState;
 use std::collections::HashMap;
 
+use crate::file_reader::FindTransaction;
 use crate::logger::LoggerActor;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::net::UdpSocket;
 use crate::file_reader::FindTransaction;
 use crate::file_writer::{FileWriter, RegisterDoneTransactionId};
+
 
 pub struct EntitySender {
     stream: Arc<UdpSocket>,
@@ -69,7 +71,6 @@ impl Handler<PrepareTransaction> for EntitySender {
 
     fn handle(&mut self, msg: PrepareTransaction, ctx: &mut Self::Context) -> Self::Result {
         // registramos primero que vamos a esperar a esta transaccion
-        // TODO: fix race condition
         let _r = self
             .coordinator_addr
             .do_send(WaitTransactionStateResponse::new(

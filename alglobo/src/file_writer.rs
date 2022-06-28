@@ -3,6 +3,7 @@ use actix::{Actor, Addr, Context, Handler, Message, Running};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 
+
 use crate::logger::LoggerActor;
 use csv::{StringRecord, Writer};
 use crate::file_reader::DONE_TRANSACTIONS_PATH;

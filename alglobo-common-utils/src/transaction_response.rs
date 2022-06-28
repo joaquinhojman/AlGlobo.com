@@ -32,8 +32,7 @@ impl From<Vec<u8>> for TransactionResponse {
 
 impl From<TransactionResponse> for Vec<u8> {
     fn from(response: TransactionResponse) -> Self {
-        let mut res = Vec::new();
-        res.push(response.transaction_state.into());
+        let mut res = vec![response.transaction_state.into()];
         res.extend_from_slice(response.transaction_id.to_be_bytes().as_slice());
         res
     }

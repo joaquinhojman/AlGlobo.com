@@ -124,7 +124,6 @@ impl Handler<GetMeanDuration> for StatisticsHandler {
 #[rtype(result = "()")]
 pub struct LogPeriodically {}
 
-// TODO: refactor
 impl Handler<LogPeriodically> for StatisticsHandler {
     type Result = ResponseActFuture<Self, ()>;
 

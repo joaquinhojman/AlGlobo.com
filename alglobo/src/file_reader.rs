@@ -1,8 +1,10 @@
 use std::collections::{HashMap, HashSet};
 use crate::transaction_dispatcher::{ReceiveTransaction, SaveDoneTransactions, TransactionDispatcher};
 use crate::file_writer::{FileWriter, FailedTransaction};
+
 use crate::LogMessage;
 use actix::{Actor, Addr, Context, Handler, Message};
+use std::collections::HashMap;
 use std::fs::File;
 use std::str::FromStr;
 
@@ -62,7 +64,8 @@ impl Handler<ServeNextTransaction> for FileReader {
             Ok(any_left) => {
                 if any_left {
                     if let Some(id) = record.get(0) {
-                        self.record_map.insert(u64::from_str(id).unwrap(), record.clone());
+                        self.record_map
+                            .insert(u64::from_str(id).unwrap(), record.clone());
                     }
                     let response = ReceiveTransaction::new(record);
                     self.logger.do_send(LogMessage::new(
@@ -95,10 +98,15 @@ impl Handler<FindTransaction> for FileReader {
 
     fn handle(&mut self, msg: FindTransaction, _ctx: &mut Self::Context) -> Self::Result {
         if let Some(record) = self.record_map.remove(&msg.transaction_id) {
-            self.failed_transaction_logger.do_send(FailedTransaction::new(record));
-            self.logger.do_send(LogMessage::new("FileReader: found specific transaction".to_string()));
+            self.failed_transaction_logger
+                .do_send(FailedTransaction::new(record));
+            self.logger.do_send(LogMessage::new(
+                "FileReader: found specific transaction".to_string(),
+            ));
         } else {
-            self.logger.do_send(LogMessage::new("FileReader: couldnt find specific transaction".to_string()));
+            self.logger.do_send(LogMessage::new(
+                "FileReader: couldnt find specific transaction".to_string(),
+            ));
         }
     }
 }

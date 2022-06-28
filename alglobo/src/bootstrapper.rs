@@ -1,3 +1,12 @@
+use crate::entity_sender::RegisterFileReader;
+use crate::file_writer::FileWriter;
+use crate::{
+    EntityReceiver, EntitySender, FileReader, LogMessage, LoggerActor, ReadStatus,
+    ReceiveEntityResponse, ServeNextTransaction, StatisticsHandler, TransactionCoordinator,
+    TransactionDispatcher,
+};
+use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, WrapFuture};
+use alglobo_common_utils::entity_type::EntityType;
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::Seek;
@@ -13,7 +22,7 @@ use crate::file_reader::{DONE_TRANSACTIONS_PATH, ReadDoneTransactions};
 use crate::file_writer::FileWriter;
 
 pub struct Bootstrapper {
-    file_path: String
+    file_path: String,
 }
 
 impl Actor for Bootstrapper {
@@ -135,13 +144,10 @@ impl Bootstrapper {
     }
 }
 
-
-
-
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct RunAlGlobo {
-    logger_addr: Addr<LoggerActor>
+    logger_addr: Addr<LoggerActor>,
 }
 
 impl RunAlGlobo {

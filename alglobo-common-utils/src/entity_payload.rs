@@ -19,14 +19,12 @@ impl EntityPayload {
     }
 }
 
-// TODO: test
 pub fn be_byte_buffer_to_u64(buffer: &[u8]) -> u64 {
     let mut mask_buffer = [0u8; 8];
     mask_buffer.copy_from_slice(&buffer[0..8]);
     u64::from_be_bytes(mask_buffer)
 }
 
-// TODO: test, poor's man deserialization
 // se entiende en big endian
 impl From<Vec<u8>> for EntityPayload {
     fn from(v: Vec<u8>) -> Self {
@@ -41,11 +39,9 @@ impl From<Vec<u8>> for EntityPayload {
     }
 }
 
-// TODO: even more testing
 impl From<EntityPayload> for Vec<u8> {
     fn from(data: EntityPayload) -> Self {
-        let mut res = Vec::new();
-        res.push(data.transaction_state.into());
+        let mut res = vec![data.transaction_state.into()];
         res.extend_from_slice(&data.transaction_id.to_be_bytes());
         res.extend_from_slice(&data.cost.to_be_bytes());
         res
