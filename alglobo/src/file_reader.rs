@@ -121,23 +121,17 @@ impl Handler<ReadDoneTransactions> for FileReader {
     type Result = ();
 
     fn handle(&mut self, _: ReadDoneTransactions, _: &mut Self::Context) -> Self::Result {
-        match Reader::from_path(DONE_TRANSACTIONS_PATH) {
-            Ok(mut file) => {
-                let mut done_transactions = HashSet::new();
-                for opt_id_as_str in file.records() {
-                    if let Ok(id_as_str) = opt_id_as_str {
-                        if let Ok(id) = u64::from_str(id_as_str.as_slice()) {
-                            done_transactions.insert(id);
-                        }
-                    }
-                }
-                if !done_transactions.is_empty() {
-                    self.transaction_dispatcher
-                        .do_send(SaveDoneTransactions::new(done_transactions));
+        if let Ok(mut file) = Reader::from_path(DONE_TRANSACTIONS_PATH) {
+            let mut done_transactions = HashSet::new();
+            for id_as_str in file.records().flatten() {
+                if let Ok(id) = u64::from_str(id_as_str.as_slice()) {
+                    done_transactions.insert(id);
                 }
             }
-            // nothing to register here
-            Err(_) => {}
-        };
+            if !done_transactions.is_empty() {
+                self.transaction_dispatcher
+                    .do_send(SaveDoneTransactions::new(done_transactions));
+            }
+        }
     }
 }

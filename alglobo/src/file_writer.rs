@@ -32,7 +32,8 @@ impl FileWriter {
             Ok(file) => file,
             Err(_) => {
                 let mut file = File::create(DONE_TRANSACTIONS_PATH).unwrap();
-                file.write_all("id\n".as_bytes()).expect("TODO: panic message");
+                file.write_all("id\n".as_bytes())
+                    .expect("TODO: panic message");
                 file
             }
         };
