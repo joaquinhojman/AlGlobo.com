@@ -3,7 +3,7 @@
 /banco/target/
 /aerolinea/target/
 /hotel/target/
-/alglobo-commons-utils/target/
+/alglobo-common-utils/target/
 
 Cargo.lock
 /alglobo/Cargo.lock
