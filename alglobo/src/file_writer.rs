@@ -1,7 +1,6 @@
 use crate::LogMessage;
 use actix::{Actor, Addr, Context, Handler, Message};
 use std::fs::{File, OpenOptions};
-use std::io::Write;
 
 use crate::file_reader::DONE_TRANSACTIONS_PATH;
 use crate::logger::LoggerActor;
@@ -30,12 +29,7 @@ impl FileWriter {
             .open(DONE_TRANSACTIONS_PATH)
         {
             Ok(file) => file,
-            Err(_) => {
-                let mut file = File::create(DONE_TRANSACTIONS_PATH).unwrap();
-                file.write_all("id\n".as_bytes())
-                    .expect("TODO: panic message");
-                file
-            }
+            Err(_) => File::create(DONE_TRANSACTIONS_PATH).unwrap(),
         };
 
         let mut result = FileWriter {
@@ -59,7 +53,6 @@ impl Actor for FileWriter {
     type Context = Context<Self>;
 
     fn started(&mut self, _: &mut Self::Context) {
-        println!("WRITING TO FILE");
         self.failed_transaction_file
             .write_record(&[HEADER_ID, HEADER_HOTEL, HEADER_BANK, HEADER_AIRLINE])
             .expect("could not write record to file");
@@ -94,6 +87,8 @@ impl Handler<FailedTransaction> for FileWriter {
                 "Saved failed transaction, with error message: {}",
                 what
             )));
+        } else {
+            let _ = self.failed_transaction_file.flush();
         }
     }
 }
@@ -122,6 +117,8 @@ impl Handler<RegisterDoneTransactionId> for FileWriter {
                 "Failed to save done transaction id, with error message: {}",
                 what
             )));
+        } else {
+            let _ = self.done_transaction_file.flush();
         }
     }
 }

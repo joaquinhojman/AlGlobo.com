@@ -131,10 +131,13 @@ impl Bootstrapper {
                 }
                 ReadStatus::ParseError(e) => {
                     log_c3.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                    panic!("ERROR: {}", e);
+                    continue;
                 }
             }
         }
+        actix_rt::signal::ctrl_c()
+            .await
+            .expect("Could not catch signal!");
     }
 }
 
@@ -154,6 +157,9 @@ impl Handler<RunAlGlobo> for Bootstrapper {
     type Result = ();
 
     fn handle(&mut self, msg: RunAlGlobo, _ctx: &mut Self::Context) -> Self::Result {
+        msg.logger_addr.do_send(LogMessage::new(
+            "[BOOTSTRAPPER] spawning alglobo schedule".to_string(),
+        ));
         println!("[BOOTSTRAPPER] spawning alglobo schedule");
         let path = self.file_path.clone();
         actix_rt::spawn(Bootstrapper::run(msg.logger_addr, path));
