@@ -1,15 +1,18 @@
-use crate::entity_sender::RegisterFileReader;
+use crate::entity_sender::RegisterFileHandles;
+use crate::file_reader::ReadDoneTransactions;
 use crate::file_writer::FileWriter;
 use crate::{
     EntityReceiver, EntitySender, FileReader, LogMessage, LoggerActor, ReadStatus,
     ReceiveEntityResponse, ServeNextTransaction, StatisticsHandler, TransactionCoordinator,
     TransactionDispatcher,
 };
-use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, WrapFuture};
+use actix::{Actor, Addr, Context, Handler, Message};
+use actix_rt::Arbiter;
 use alglobo_common_utils::entity_type::EntityType;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::net::UdpSocket;
+use tokio::sync::oneshot;
 
 pub struct Bootstrapper {
     file_path: String,
@@ -76,42 +79,59 @@ impl Bootstrapper {
         let transaction_dispatcher = TransactionDispatcher::new(sender_addr, log_c).start();
 
         let log_c = logger_addr.clone();
-        let file_writer = match FileWriter::new("failed_transactions.csv".to_string(), log_c) {
-            Ok(file_writer) => file_writer,
-            Err(e) => {
-                logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                panic!("ERROR: {}", e)
-            }
-        }
-        .start();
+        let log_c2 = logger_addr.clone();
+        let log_c3 = logger_addr.clone();
+        let reader_writer_arbiter = Arbiter::new();
 
-        let log_c = logger_addr.clone();
-        let file_reader =
-            match FileReader::new(file_path, transaction_dispatcher, file_writer, log_c) {
-                Ok(file_reader) => file_reader,
+        let (tx_rd, rx_rd) = oneshot::channel();
+        let (tx_wr, rx_wr) = oneshot::channel();
+
+        let reader_writer_execution = async move {
+            let file_writer = match FileWriter::new("failed_transactions.csv".to_string(), log_c) {
+                Ok(file_writer) => file_writer,
                 Err(e) => {
                     logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                    panic!("ERROR: {}", e)
+                    panic!("ERROR: {}", e);
                 }
             }
             .start();
-        sender_clone.do_send(RegisterFileReader::new(file_reader.clone()));
+            let file_writer_clone = file_writer.clone();
+
+            let file_reader =
+                match FileReader::new(file_path, transaction_dispatcher, file_writer, log_c2) {
+                    Ok(file_reader) => file_reader,
+                    Err(e) => {
+                        logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
+                        panic!("ERROR: {}", e);
+                    }
+                }
+                .start();
+            file_reader.do_send(ReadDoneTransactions {});
+            let _ = tx_rd.send(file_reader);
+            let _ = tx_wr.send(file_writer_clone);
+        };
+
+        let _ = reader_writer_arbiter.spawn(reader_writer_execution);
+        let file_reader = rx_rd.await.unwrap();
+        let file_writer = rx_wr.await.unwrap();
+
+        sender_clone.do_send(RegisterFileHandles::new(file_reader.clone(), file_writer));
 
         // esta logica no se donde debería ir
         let msg = ServeNextTransaction {};
-        logger_addr.do_send(LogMessage::new("Lets read the file...".to_string()));
+        log_c3.do_send(LogMessage::new("Lets read the file...".to_string()));
         while let Ok(res) = file_reader.send(msg).await {
             match res {
                 ReadStatus::KeepReading => {
-                    logger_addr.do_send(LogMessage::new("KeepReading".to_string()));
+                    log_c3.do_send(LogMessage::new("KeepReading".to_string()));
                 }
                 ReadStatus::Eof => {
-                    logger_addr.do_send(LogMessage::new("EOF".to_string()));
+                    log_c3.do_send(LogMessage::new("EOF".to_string()));
                     break;
                 }
                 ReadStatus::ParseError(e) => {
-                    logger_addr.do_send(LogMessage::new(format!("ERROR: {}", e)));
-                    panic!("ERROR: {}", e)
+                    log_c3.do_send(LogMessage::new(format!("ERROR: {}", e)));
+                    panic!("ERROR: {}", e);
                 }
             }
         }
@@ -133,9 +153,9 @@ impl RunAlGlobo {
 impl Handler<RunAlGlobo> for Bootstrapper {
     type Result = ();
 
-    fn handle(&mut self, msg: RunAlGlobo, ctx: &mut Self::Context) -> Self::Result {
+    fn handle(&mut self, msg: RunAlGlobo, _ctx: &mut Self::Context) -> Self::Result {
         println!("[BOOTSTRAPPER] spawning alglobo schedule");
         let path = self.file_path.clone();
-        ctx.spawn(Bootstrapper::run(msg.logger_addr, path).into_actor(self));
+        actix_rt::spawn(Bootstrapper::run(msg.logger_addr, path));
     }
 }

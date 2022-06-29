@@ -139,7 +139,7 @@ impl Handler<LogPeriodically> for StatisticsHandler {
                     } else {
                         me.elapsed_time.as_secs() as f64 / me.current_finished_transactions as f64
                     };
-                    let tps = me.current_finished_transactions as f64 / mean_time;
+                    let tps = me.current_finished_transactions as f64 / me.elapsed_time.as_secs() as f64;
                     println!("[STATS]\n\t- Total transactions: {}\n\t- Finished Transactions: {}\n\t- Mean time {}s\n\t- Finished transactions per second: {}\n", me.total_transactions, me.current_finished_transactions, mean_time, tps);
                     ctx.address().do_send(LogPeriodically {})
                 })

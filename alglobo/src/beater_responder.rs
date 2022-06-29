@@ -125,9 +125,7 @@ impl Handler<Responder> for BeaterResponder {
                         // notifico por queue que hay un lider nuevo
                         StartPing(id_from)
                     }
-                    _ => {
-                        Continue
-                    }
+                    _ => Continue,
                 }
             } else {
                 Continue

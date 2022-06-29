@@ -1,5 +1,9 @@
 use crate::file_writer::{FailedTransaction, FileWriter};
-use crate::transaction_dispatcher::{ReceiveTransaction, TransactionDispatcher};
+use crate::transaction_dispatcher::{
+    ReceiveTransaction, SaveDoneTransactions, TransactionDispatcher,
+};
+use std::collections::HashSet;
+
 use crate::LogMessage;
 use actix::{Actor, Addr, Context, Handler, Message};
 use std::collections::HashMap;
@@ -9,6 +13,8 @@ use std::str::FromStr;
 use crate::logger::LoggerActor;
 use actix::dev::MessageResponse;
 use csv::{Reader, StringRecord};
+
+pub const DONE_TRANSACTIONS_PATH: &str = "done_transactions.csv";
 
 pub struct FileReader {
     transaction_file_handle: Reader<File>,
@@ -103,6 +109,29 @@ impl Handler<FindTransaction> for FileReader {
             self.logger.do_send(LogMessage::new(
                 "FileReader: couldnt find specific transaction".to_string(),
             ));
+        }
+    }
+}
+
+#[derive(Message)]
+#[rtype(result = "")]
+pub struct ReadDoneTransactions {}
+
+impl Handler<ReadDoneTransactions> for FileReader {
+    type Result = ();
+
+    fn handle(&mut self, _: ReadDoneTransactions, _: &mut Self::Context) -> Self::Result {
+        if let Ok(mut file) = Reader::from_path(DONE_TRANSACTIONS_PATH) {
+            let mut done_transactions = HashSet::new();
+            for id_as_str in file.records().flatten() {
+                if let Ok(id) = u64::from_str(id_as_str.as_slice()) {
+                    done_transactions.insert(id);
+                }
+            }
+            if !done_transactions.is_empty() {
+                self.transaction_dispatcher
+                    .do_send(SaveDoneTransactions::new(done_transactions));
+            }
         }
     }
 }

@@ -85,13 +85,6 @@ fn main() -> Result<(), ()> {
         let coordinator_socket =
             Arc::new(UdpSocket::bind(id_to_ctrladdr(pid as usize)).await.unwrap());
 
-        // para sincronizar a los procesos
-        /*
-        let mut barrier_buffer = [0;1];
-        let _ = coordinator_socket.recv_from(&mut barrier_buffer).await;
-
-         */
-
         let data_clone = data_socket.clone();
         let coordinator_clone = coordinator_socket.clone();
 
