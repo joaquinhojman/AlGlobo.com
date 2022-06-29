@@ -61,7 +61,8 @@ fn main() -> Result<(), ()> {
     let logger_sender = Arc::new(Mutex::new(sx_l));
     let logger_arbiter = Arbiter::new();
     let logger_execution = async move {
-        let logger_addr = LoggerActor::new(format!("log_alglobo_replica_pid_{}.log", pid).as_str()).start();
+        let logger_addr =
+            LoggerActor::new(format!("log_alglobo_replica_pid_{}.log", pid).as_str()).start();
         let _r = logger_sender.lock().unwrap().send(logger_addr);
     };
     logger_arbiter.spawn(logger_execution);
