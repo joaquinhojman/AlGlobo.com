@@ -67,7 +67,7 @@ impl Handler<ReceiveTransaction> for TransactionDispatcher {
         _ctx: &mut Self::Context,
     ) -> Self::Result {
         let transaction = raw_transaction.deserialize(&self.logger);
-        // if transaction has not already been done, we go ahead and commit
+        // if transaction has not already been done, we go ahead and prepare it
         if !self
             .done_transactions
             .contains(&transaction.get_transaction_id())

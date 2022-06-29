@@ -50,13 +50,18 @@ const PROCESSES: u8 = 4;
 
 fn main() -> Result<(), ()> {
     let actor_system = System::new();
+    let argv = args().collect::<Vec<String>>();
+    if argv.len() != 3 {
+        panic!("ERROR: Parametros incorrectos. ./alglobo <pid> <transaction_file>");
+    }
 
+    let pid = argv[1].as_str().parse::<u8>().unwrap();
     //Inicializacion del Actor Logger
     let (sx_l, tx_l) = mpsc::channel();
     let logger_sender = Arc::new(Mutex::new(sx_l));
     let logger_arbiter = Arbiter::new();
     let logger_execution = async move {
-        let logger_addr = LoggerActor::new("logf.log").start();
+        let logger_addr = LoggerActor::new(format!("log_alglobo_replica_pid_{}.log", pid).as_str()).start();
         let _r = logger_sender.lock().unwrap().send(logger_addr);
     };
     logger_arbiter.spawn(logger_execution);
@@ -64,13 +69,6 @@ fn main() -> Result<(), ()> {
 
     logger_addr.do_send(LogMessage::new("Logger inicializado".to_string()));
 
-    let argv = args().collect::<Vec<String>>();
-    if argv.len() != 3 {
-        logger_addr.do_send(LogMessage::new("ERROR: Parametros incorrectos".to_string()));
-        panic!("ERROR: Parametros incorrectos");
-    }
-
-    let pid = argv[1].as_str().parse::<u8>().unwrap();
     let all_pids = (0..PROCESSES).collect::<Vec<u8>>();
     let filtered_pids = all_pids
         .clone()
@@ -117,7 +115,7 @@ fn main() -> Result<(), ()> {
 
         actix_rt::signal::ctrl_c()
             .await
-            .expect("TODO: panic message");
+            .expect("Could not catch signal");
         System::current().stop();
     });
 

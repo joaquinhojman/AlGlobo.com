@@ -94,14 +94,17 @@ impl Handler<Ping> for PingerFinder {
                 Err(_) => Err(()),
             }
         };
-        Box::pin(fut.into_actor(self).map(|res, _, ctx| match res {
+        Box::pin(fut.into_actor(self).map(|res, me, ctx| match res {
             Ok(_) => {
                 // si es ok sigo pingeando
                 ctx.address().do_send(msg)
             }
             // si es error busco un nuevo lider
             Err(_) => {
-                println!("Error");
+                println!(
+                    "[PID {}] PING to pid {:?} failed, search phase started",
+                    me.pid, me.leader
+                );
                 ctx.address().do_send(Find::new(msg.responder))
             }
         }))

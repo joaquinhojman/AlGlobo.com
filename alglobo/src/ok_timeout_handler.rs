@@ -1,6 +1,6 @@
 use crate::beater_responder::BroadcastCoordinator;
 use crate::bootstrapper::{Bootstrapper, RunAlGlobo};
-use crate::{BeaterResponder, LoggerActor};
+use crate::{BeaterResponder, LogMessage, LoggerActor};
 use actix::{
     Actor, ActorFutureExt, Addr, Context, Handler, Message, ResponseActFuture, WrapFuture,
 };
@@ -67,13 +67,20 @@ impl Handler<WaitTimeout> for OkTimeoutHandler {
         let fut = async move {
             match timeout(Duration::from_secs(10), rx).await {
                 Ok(_) => {
-                    println!("[PID {}] ok, no soy coordinator, espero", pid);
+                    logger.do_send(LogMessage::new(format!(
+                        "[PID {}] Recibi Ok, no soy coordinador",
+                        pid
+                    )));
                     // todavia no sabes cual es el coordinador
                     // esperar coordinador
                     Ok(())
                 }
                 Err(_) => {
-                    println!("[PID {}] timeout, mandando coordinator", pid);
+                    logger.do_send(LogMessage::new(format!(
+                        "[PID {}] Timeout, mandando coordinator",
+                        pid
+                    )));
+                    println!("[PID {}] Soy coordinador", pid);
                     msg.responder
                         .do_send(BroadcastCoordinator::new(msg.all_pids));
                     bootstrapper.do_send(RunAlGlobo::new(logger));
